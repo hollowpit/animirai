@@ -1,6 +1,6 @@
 
 class Manga():
-    def __init__(self, title, author, description, poster, chapters, chapter_and_pages: dict, tags=None, genres=None, status="Ongoing", rating=-1):
+    def __init__(self, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
         self.title = title
         self.author = author
         self.description = description
@@ -28,10 +28,24 @@ class Manga():
                 },
             ],
         }
+
+    def get(self) -> dict:
+        return {
+            "title": self.title,
+            "author": self.author,
+            "description": self.description,
+            "poster": self.poster,
+            "total_chapters": self.chapters,
+            "tags": self.tags,
+            "genres": self.genres,
+            "status": self.status,
+            "rating": self.rating,
+            "chapters_and_pages": self._chapters_and_pages_model
+        }
             
 
 class Anime():
-    def __init__(self, title, description, poster, episodes, episode_and_videos: dict, tags=None, genres=None, status="Ongoing", rating=-1):
+    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_and_videos: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
         self.title = title
         self.description = description
         self.poster = poster
@@ -60,4 +74,17 @@ class Anime():
                     }
                 },
             ]
+        }
+
+    def get(self) -> dict:
+        return {
+            "title": self.title,
+            "description": self.description,
+            "poster": self.poster,
+            "total_episodes": self.episodes,
+            "tags": self.tags,
+            "genres": self.genres,
+            "status": self.status,
+            "rating": self.rating,
+            "episodes_and_videos": self._episodes_and_videos_model
         }
