@@ -320,7 +320,7 @@ class Comick(Scraper):
                     "name": md_genre.get("name", "")
                 })
 
-        for genre in genres_data:
+        for genre in genres_data or []:
             if genre.get("name"):
                 genres.append({
                     "group": genre.get("group", ""),
