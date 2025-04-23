@@ -159,12 +159,55 @@ class Toonily(Scraper):
             image_url = image.get("data-src") or image.get("src") or ""
             if image_url and "images/default-image" not in image_url:
                 pages.append(image_url)
+                # Save images to test directory
+                self._save_image_for_testing(image_url, chapter_id, index)
         
         return Chapter(
             title=title,
             pages=pages,
             id=chapter_id
         )
+        
+    def _save_image_for_testing(self, image_url: str, chapter_id: str, index: int) -> None:
+        """
+        Save an image from a CDN URL to the test directory for testing purposes.
+        
+        Args:
+            image_url (str): The URL of the image to save
+            chapter_id (str): The chapter ID to use in the filename
+            index (int): The index of the image in the chapter
+        """
+        import os
+        import requests
+        import shutil
+        from pathlib import Path
+        
+        # Create test_img directory if it doesn't exist
+        test_dir = Path("test_img")
+        if not test_dir.exists():
+            test_dir.mkdir(parents=True, exist_ok=True)
+            
+        # Clean chapter_id for filename (remove slashes)
+        clean_chapter_id = chapter_id.replace("/", "_").replace("\\", "_")
+        
+        # Determine file extension from URL
+        file_ext = os.path.splitext(image_url)[1]
+        if not file_ext:
+            file_ext = ".jpg"  # Default to jpg if no extension found
+            
+        # Create a filename based on chapter and image index
+        filename = f"{clean_chapter_id}_page_{index:03d}{file_ext}"
+        file_path = test_dir / filename
+        
+        try:
+            # Download the image with a streaming request
+            with requests.get(image_url, stream=True, headers=self.headers) as r:
+                r.raise_for_status()
+                with open(file_path, 'wb') as f:
+                    shutil.copyfileobj(r.raw, f)
+            print(f"Saved image to {file_path}")
+        except Exception as e:
+            print(f"Error saving image {image_url}: {e}")
 
     def _convert_to_manga(self, manga_dict: Dict[str, Any]) -> Manga:
         if not manga_dict:
