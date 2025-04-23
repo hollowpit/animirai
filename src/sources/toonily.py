@@ -2,7 +2,6 @@
 import json
 import re
 import time
-import random
 import cloudscraper
 from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup
@@ -24,25 +23,13 @@ class Toonily(Scraper):
                 'browser': 'chrome',
                 'platform': 'windows',
                 'mobile': False
-            },
-            delay=8,  # Add delay between requests
-            interpreter='nodejs'  # Use nodejs interpreter for better CF bypass
+            }
         )
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
             "Referer": f"{self.base_url}/",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Cache-Control": "max-age=0",
-            "Sec-Ch-Ua": '"Not A(Brand";v="99", "Microsoft Edge";v="120", "Chromium";v="120"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
             "Origin": self.base_url,
             "Connection": "keep-alive",
         }
@@ -150,15 +137,6 @@ class Toonily(Scraper):
     def get_chapter(self, chapter_id: str) -> Chapter:
         url = f"{self.base_url}/{chapter_id}"
         
-        # Random delay to avoid being detected as a bot
-        time.sleep(2 + 3 * random.random())
-        
-        # First get the cookies from the main page to help bypass Cloudflare
-        try:
-            self.session.get(self.base_url, headers=self.headers)
-        except:
-            pass
-            
         response = self.session.get(url, headers=self.headers, cookies=self.cookie)
         if response.status_code != 200:
             return Chapter(
@@ -180,7 +158,7 @@ class Toonily(Scraper):
         for index, image in enumerate(images):
             image_url = image.get("data-src") or image.get("src") or ""
             if image_url and "images/default-image" not in image_url:
-                pages.append(image_url.replace("\t", ''))
+                pages.append(image_url)
         
         return Chapter(
             title=title,
@@ -394,19 +372,9 @@ class Toonily(Scraper):
         """Fetch chapters for a manga using its ID"""
         chapters = {}
         
-        # Random delay to avoid being detected as a bot
-        time.sleep(2 + 3 * random.random())
-        
         # Make sure URL uses the correct manga subdirectory
         url = f"{self.base_url}/{self.manga_sub_string}/{manga_id}/"
         
-        # First get the cookies from the main page
-        try:
-            self.session.get(self.base_url, headers=self.headers)
-        except:
-            pass
-            
-        # Now get the manga page with cookies from previous request
         response = self.session.get(url, headers=self.headers, cookies=self.cookie)
         if response.status_code != 200:
             return chapters
@@ -543,70 +511,3 @@ class Toonily(Scraper):
                 {"name": "Webtoons", "value": "webtoons"},
             ]
         }
-
-
-    def download_chapter(self, chapter_id: str, output_dir: str = "test_img") -> bool:
-        """Download all images from a chapter to the specified directory
-        
-        Args:
-            chapter_id: The chapter ID to download
-            output_dir: Directory to save images to (default: test_img)
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        import os
-        import requests
-        from pathlib import Path
-        
-        # Get chapter info
-        chapter = self.get_chapter(chapter_id)
-        if not chapter.pages:
-            print(f"Error: No pages found for chapter {chapter_id}")
-            return False
-            
-        # Create directory structure
-        chapter_dir = Path(output_dir) / chapter_id.replace("/", "_")
-        chapter_dir.mkdir(parents=True, exist_ok=True)
-        
-        print(f"Downloading {len(chapter.pages)} images from {chapter.title} to {chapter_dir}")
-        
-        # Download each image
-        for i, image_url in enumerate(chapter.pages):
-            if not image_url:
-                continue
-                
-            # Determine file extension from URL
-            ext = image_url.split(".")[-1].lower()
-            if ext not in ["jpg", "jpeg", "png", "gif", "webp"]:
-                ext = "jpg"  # Default to jpg if extension can't be determined
-                
-            # Create filename with padding (001.jpg, 002.jpg, etc.)
-            filename = f"{i+1:03d}.{ext}"
-            filepath = chapter_dir / filename
-            
-            try:
-                # Random delay to avoid being detected as a bot
-                time.sleep(1 + 2 * random.random())
-                
-                # Download the image with referer header
-                img_headers = {
-                    "User-Agent": self.headers["User-Agent"],
-                    "Referer": f"{self.base_url}/{chapter_id}",
-                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-                }
-                
-                response = requests.get(image_url, headers=img_headers, stream=True, timeout=30)
-                if response.status_code == 200:
-                    with open(filepath, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    print(f"Downloaded {filename} ({i+1}/{len(chapter.pages)})")
-                else:
-                    print(f"Failed to download {filename}: HTTP {response.status_code}")
-            except Exception as e:
-                print(f"Error downloading {filename}: {str(e)}")
-        
-        print(f"Chapter download completed: {chapter.title}")
-        return True
-
