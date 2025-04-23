@@ -174,14 +174,24 @@ class HentaiRead(Scraper):
         return self._convert_to_manga(manga_dict)
 
     def get_chapter(self, chapter_id: str) -> Chapter:
-        # Make sure we include the "english" and page part in the URL
-        if not chapter_id.endswith('/'):
-            chapter_id = f"{chapter_id}/"
+        # Format the URL correctly
+        chapter_url = chapter_id
+        if not chapter_id.startswith(self.base_url):
+            chapter_url = f"{self.base_url}/{chapter_id}"
         
-        url = f"{self.base_url}/{chapter_id}english/p/1/"
+        # Make sure URL ends with slash and includes english/p/1
+        if not chapter_url.endswith('/'):
+            chapter_url = f"{chapter_url}/"
+            
+        if not 'english/p/' in chapter_url:
+            chapter_url = f"{chapter_url}english/p/1/"
         
-        response = self.session.get(url, headers=self.headers)
+        print(f"Fetching chapter from URL: {chapter_url}")
+        
+        # Get the first page to extract total pages
+        response = self.session.get(chapter_url, headers=self.headers)
         if response.status_code != 200:
+            print(f"Failed to fetch chapter. Status code: {response.status_code}")
             return Chapter(
                 title="Error loading chapter",
                 pages=[],
@@ -189,11 +199,58 @@ class HentaiRead(Scraper):
             )
         
         soup = BeautifulSoup(response.text, "html.parser")
-        pages = self._extract_chapter_pages(soup)
+        
+        # Try to get total pages
+        total_pages = 1
+        pagination = soup.select(".content-pagination a:not(.next):not(.prev)")
+        if pagination:
+            try:
+                total_pages = max([int(a.text.strip()) for a in pagination if a.text.strip().isdigit()])
+            except Exception as e:
+                print(f"Error parsing pagination: {e}")
+        
+        print(f"Total pages found: {total_pages}")
+        
+        # Collect images from all pages
+        all_images = []
+        
+        # First try to extract directly from JavaScript data
+        js_images = self._extract_chapter_pages_from_js(soup)
+        if js_images:
+            print(f"Successfully extracted {len(js_images)} images from JavaScript data")
+            all_images = js_images
+        else:
+            # If JS extraction failed, try direct HTML extraction from all pages
+            all_images = self._extract_chapter_pages_from_html(soup)
+            base_url = chapter_url.rsplit('p/', 1)[0] + 'p/'
+            
+            # If we have more than one page, fetch the rest
+            for page_num in range(2, total_pages + 1):
+                page_url = f"{base_url}{page_num}/"
+                print(f"Fetching additional page: {page_url}")
+                
+                try:
+                    page_response = self.session.get(page_url, headers=self.headers)
+                    if page_response.status_code == 200:
+                        page_soup = BeautifulSoup(page_response.text, "html.parser")
+                        page_images = self._extract_chapter_pages_from_html(page_soup)
+                        all_images.extend(page_images)
+                except Exception as e:
+                    print(f"Error fetching page {page_num}: {e}")
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_images = []
+        for img in all_images:
+            if img not in seen:
+                seen.add(img)
+                unique_images.append(img)
+        
+        print(f"Total unique images found: {len(unique_images)}")
         
         return Chapter(
-            title="Chapter",
-            pages=pages,
+            title=f"Chapter",
+            pages=unique_images,
             id=chapter_id
         )
 
@@ -336,57 +393,122 @@ class HentaiRead(Scraper):
         
         return manga_details
 
-    def _extract_chapter_pages(self, soup: BeautifulSoup) -> List[str]:
+    def _extract_chapter_pages_from_js(self, soup: BeautifulSoup) -> List[str]:
+        """Extract chapter pages from JavaScript data embedded in the page"""
         pages = []
         
         # Get the base URL from the chapter-js-extra script
         chapter_extra_data = soup.select_one("#single-chapter-js-extra")
         base_url = None
         
-        if chapter_extra_data:
+        if chapter_extra_data and chapter_extra_data.string:
             data_content = chapter_extra_data.string
-            match = re.search(r'= (\{[^;]+)', data_content)
+            match = re.search(r'= (\{.+?\})(;|\s)', data_content)
             if match:
                 try:
-                    json_data = json.loads(match.group(1))
+                    json_str = match.group(1)
+                    # Fix potential JSON syntax issues
+                    json_str = json_str.replace("'", '"')
+                    json_data = json.loads(json_str)
                     base_url = json_data.get("baseUrl")
+                    print(f"Found base URL: {base_url}")
                 except Exception as e:
                     print(f"Error parsing chapter extra data: {e}")
-                    pass
+                    # Try other regex patterns if needed
+                    alt_match = re.search(r'"baseUrl":"([^"]+)"', data_content)
+                    if alt_match:
+                        base_url = alt_match.group(1)
+                        print(f"Found base URL with alternate method: {base_url}")
         
         # Get the encoded chapter data
+        encoded_data = None
         chapter_data = soup.select_one("#single-chapter-js-before")
         if chapter_data and chapter_data.string:
             data_content = chapter_data.string
-            # Look for the base64 encoded data
-            match = re.search(r'[\'"]?(ey[A-Za-z0-9_-]+)[\'"]?', data_content)
             
-            if match and base_url:
-                try:
+            # Try multiple regex patterns to find the base64 data
+            patterns = [
+                r'[\'"]?(ey[A-Za-z0-9_-]+)[\'"]?',
+                r'return\s+[\'"]?(ey[A-Za-z0-9_-]+)[\'"]?',
+                r'var\s+\w+\s*=\s*[\'"]?(ey[A-Za-z0-9_-]+)[\'"]?'
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, data_content)
+                if match:
                     encoded_data = match.group(1)
+                    break
+            
+            if encoded_data and base_url:
+                try:
                     # Add padding if needed
                     padding = len(encoded_data) % 4
                     if padding:
                         encoded_data += '=' * (4 - padding)
-                        
+                    
+                    print(f"Found encoded data: {encoded_data[:20]}...")
                     decoded_data = base64.b64decode(encoded_data).decode('utf-8')
                     json_data = json.loads(decoded_data)
                     
+                    # Try different paths in the JSON structure
                     images = json_data.get("data", {}).get("chapter", {}).get("images", [])
+                    if not images and "images" in json_data:
+                        images = json_data.get("images", [])
+                    
                     for image in images:
                         if image.get("src"):
-                            pages.append(f"{base_url}/{image.get('src')}")
+                            img_url = image.get("src")
+                            if not img_url.startswith(('http://', 'https://')):
+                                img_url = f"{base_url}/{img_url}"
+                            pages.append(img_url)
+                    
+                    print(f"Extracted {len(pages)} images from JS data")
                 except Exception as e:
                     print(f"Error decoding chapter data: {e}")
         
-        if not pages:
-            # Fallback to direct image extraction if the JavaScript approach fails
-            image_elements = soup.select(".reading-content img")
-            for img in image_elements:
+        return pages
+    
+    def _extract_chapter_pages_from_html(self, soup: BeautifulSoup) -> List[str]:
+        """Extract chapter pages directly from HTML"""
+        pages = []
+        
+        # Try multiple selectors to find images
+        selectors = [
+            ".reading-content img",
+            ".entry-content img",
+            ".page-break img",
+            "#content img",
+            ".wp-manga-chapter-img"
+        ]
+        
+        for selector in selectors:
+            image_elements = soup.select(selector)
+            if image_elements:
+                for img in image_elements:
+                    # Try multiple attributes for image source
+                    src = img.get("data-src") or img.get("data-lazy-src") or img.get("data-full-url") or img.get("src")
+                    if src and not src.endswith(('.gif', 'loading.gif')):
+                        if not src.startswith(('http://', 'https://')):
+                            # Make relative URLs absolute
+                            if src.startswith('/'):
+                                src = f"https://hentairead.com{src}"
+                            else:
+                                src = f"https://hentairead.com/{src}"
+                        pages.append(src)
+        
+        # Also try to find images in noscript tags
+        noscript_elements = soup.select("noscript")
+        for noscript in noscript_elements:
+            noscript_html = BeautifulSoup(noscript.string, "html.parser")
+            noscript_images = noscript_html.select("img")
+            for img in noscript_images:
                 src = img.get("data-src") or img.get("data-lazy-src") or img.get("src")
-                if src:
+                if src and not src.endswith(('.gif', 'loading.gif')):
+                    if not src.startswith(('http://', 'https://')):
+                        src = f"https://hentairead.com/{src}"
                     pages.append(src)
         
+        print(f"Extracted {len(pages)} images from HTML")
         return pages
 
     def _get_tag_id(self, tag: str, tag_type: str) -> Optional[int]:
