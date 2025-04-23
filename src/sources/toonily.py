@@ -355,6 +355,10 @@ class Toonily(Scraper):
             "artist": artist,
             "description": description,
             "thumbnail_url": thumbnail_url,
+            "genres": genres,
+            "status": status,
+            "chapters": chapters
+        }
 
     def _fetch_chapter_list(self, manga_id: str) -> Dict[str, str]:
         """Fetch chapters for a manga using its ID"""
@@ -393,10 +397,6 @@ class Toonily(Scraper):
             pass
             
         return chapters
-
-            "genres": genres,
-            "status": status,
-            "chapters": chapters
         }
 
     def _parse_date(self, date_string: str) -> int:
