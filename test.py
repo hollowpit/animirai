@@ -3,7 +3,7 @@ import sys
 
 #from src.sources.toonily import Toonily
 from src.sources.hentairead import HentaiRead
-Toonily="n"
+Toonily="n&"
 def test_toonily():
     print("Testing Toonily scraper...")
     
@@ -98,16 +98,19 @@ def test_hentairead():
     if mangas:
         print("\nTesting manga details:")
         manga_id = mangas[0].id
+        print(manga_id)
         details = scraper.manga_details(manga_id)
         if details:
             print(f"Title: {details.title}")
             print(f"Author: {details.author}")
             print(f"Genres: {', '.join(details.genres[:5]) if details.genres else 'None'}")
             
-            # If we have chapters, test one
+            # If we have chapters, test on
             if details.chapter_ids:
                 print("\nTesting chapter retrieval:")
+                print(details.chapter_ids)
                 chapter_id = next(iter(details.chapter_ids.values()))
+                print(chapter_id)
                 chapter = scraper.get_chapter(chapter_id)
                 if chapter:
                     print(f"Chapter title: {chapter.title}")
