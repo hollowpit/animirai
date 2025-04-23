@@ -1,3 +1,5 @@
 from src.sources.toonily import Toonily
 scraper = Toonily()
-print(scraper.popular_manga())
+mangas = scraper.popular_manga()
+for manga in mangas:
+    print(manga.get())
