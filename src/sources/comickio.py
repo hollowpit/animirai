@@ -772,6 +772,7 @@ class Comick(Scraper):
             {"title": "1 year", "value": "365"},
         ]
 
+    @staticmethod
     def _get_sorts_list() -> List[Dict[str, str]]:
         return [
             {"title": "Most popular", "value": "follow"},
