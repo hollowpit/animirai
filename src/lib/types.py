@@ -2,7 +2,7 @@ import requests
 import os
 
 class Manga():
-    def __init__(self, id: str, url: str, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, id: str, url: str, title: str, author: str, description: str, poster: str, chapters: int, tags:list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00, chapter_ids: dict= {"Chapter 1": "xxxxxxxx"}):
         self.id = id
         self.url = url
         self.title = title
@@ -10,14 +10,15 @@ class Manga():
         self.description = description
         self.poster = poster
         self.chapters = chapters
-        self.chapter_and_pages = chapter_and_pages
+        #self.chapter_and_pages = chapter_and_pages
         self.tags = tags
         self.genres = genres
         self.status = status
         self.rating = rating
-
+        self.chapter_ids = chapter_ids
+    """
     def _chapters_and_pages_model(self):
-        """General Structure of the chapters and pages"""
+        General Structure of the chapters and pages
         return {
             "chapters": [
                 {
@@ -27,11 +28,7 @@ class Manga():
                 },
                 {
                     "title": "Chapter 2 - Name Of The Chapter",
-                    "total_pages": 3,
-                    "pages": ["page_url_1", "page_url_2"]
-                },
-            ],
-        }
+        """
 
     def get(self) -> dict:
         return {
@@ -44,12 +41,30 @@ class Manga():
             "genres": self.genres,
             "status": self.status,
             "rating": self.rating,
-            "chapters_and_pages": self._chapters_and_pages_model
+            "url": self.url,
+            "chapter_ids": self.chapter_ids
+            
+            #"chapters_and_pages": self._chapters_and_pages_model
         }
 
+class Chapter():
+    def __init__(self, title: str, pages: list, id):
+        self.id = id
+        self.title = title
+        self.pages = pages   
+        self.total_pages = len(pages)
+
+    def get(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "total_pages": self.total_pages,
+            "pages": self.pages
+        }
+    
 
 class Anime():
-    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_and_videos: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_and_videos: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
         self.title = title
         self.description = description
         self.poster = poster
