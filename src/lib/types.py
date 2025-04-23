@@ -16,20 +16,7 @@ class Manga():
         self.status = status
         self.rating = rating
         self.chapter_ids = chapter_ids
-    """
-    def _chapters_and_pages_model(self):
-        General Structure of the chapters and pages
-        return {
-            "chapters": [
-                {
-                    "title": "Chapter 1 - Name Of The Chapter",
-                    "total_pages": 3,
-                    "pages": ["page_url_1", "page_url_2"] # And so on.
-                },
-                {
-                    "title": "Chapter 2 - Name Of The Chapter",
-        """
-
+    
     def get(self) -> dict:
         return {
             "title": self.title,
