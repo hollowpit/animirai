@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from src.lib.types import Scraper, Manga, Chapter
 
-class NHentaiNet(Scraper):
+class NHentai(Scraper):
     def __init__(self):
         super().__init__(
             name="NHentai",
@@ -19,7 +19,7 @@ class NHentaiNet(Scraper):
         )
         self.available_filters = self._get_filters()
         self.available_qualities = []
-        self.language = "all"
+        self.lang = "all"
         self.session = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
