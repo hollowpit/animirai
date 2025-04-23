@@ -84,7 +84,7 @@ class Toonily(Scraper):
                 return [manga_details] if manga_details else []
             return []
         
-        url = f"{self.base_url}/page/{page}/?s={query}&post_type=wp-manga"
+        url = f"{self.base_url}/?s={query}&post_type=wp-manga"
         
         if filters:
             for key, value in filters.items():
@@ -104,6 +104,9 @@ class Toonily(Scraper):
                             url += f"&status[]={status.strip()}"
                 elif key == "order" and value:
                     url += f"&m_orderby={value}"
+        
+        if page > 1:
+            url = f"{url}&paged={page}"
         
         response = self.session.get(url, headers=self.headers, cookies=self.cookie)
         if response.status_code != 200:
