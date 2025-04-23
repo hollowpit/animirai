@@ -92,6 +92,7 @@ class Comick(Scraper):
         poster = manga_dict.get("thumbnail_url", "")
         
         manga_id = manga_dict.get("id", "")
+        manga_url = manga_dict.get("url", "")
         status = manga_dict.get("status", "Ongoing")
         genres = manga_dict.get("genres", [])
         
@@ -112,6 +113,8 @@ class Comick(Scraper):
                 })
         
         return Manga(
+            id=manga_id,
+            url=manga_url if manga_url else f"{self.base_url}/comic/{manga_id}",
             title=title,
             author=author,
             description=description,

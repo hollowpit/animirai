@@ -2,7 +2,8 @@ import requests
 import os
 
 class Manga():
-    def __init__(self, url, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, id: str, url: str, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+        self.id = id
         self.url = url
         self.title = title
         self.author = author
@@ -45,7 +46,7 @@ class Manga():
             "rating": self.rating,
             "chapters_and_pages": self._chapters_and_pages_model
         }
-            
+
 
 class Anime():
     def __init__(self, title: str, description: str, poster: str, episodes: int, episode_and_videos: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
@@ -77,7 +78,7 @@ class Anime():
                     }
                 },
             }
-        
+
 
     def get(self) -> dict:
         return {
