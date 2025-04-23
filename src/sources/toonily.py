@@ -230,8 +230,12 @@ class Toonily(Scraper):
         manga_list = []
         manga_elements = soup.select("div.c-tabs-item__content")
         
+        # If no results with the first selector, try the alternative
+        if not manga_elements:
+            manga_elements = soup.select("div.page-item-detail.manga")
+        
         for element in manga_elements:
-            title_element = element.select_one("div.post-title a")
+            title_element = element.select_one("div.post-title a, h3.h5 a")
             if not title_element:
                 continue
                 
