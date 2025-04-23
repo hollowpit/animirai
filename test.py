@@ -10,7 +10,12 @@ scraper = Toonily()
 
 # Search for a manga
 print("Searching for manga...")
-manga = scraper.search_manga("my landlady")[0].get()
+search_results = scraper.search_manga("solo leveling") # Changed to a more popular title
+if not search_results:
+    print("No manga found. Please try a different search term.")
+    exit(1)
+    
+manga = search_results[0].get()
 print(f"Found manga: {manga['title']}")
 
 # Get chapter info
