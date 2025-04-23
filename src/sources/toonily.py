@@ -397,7 +397,7 @@ class Toonily(Scraper):
             pass
             
         return chapters
-        }
+        
 
     def _parse_date(self, date_string: str) -> int:
         if not date_string or date_string.lower() == "updating":
