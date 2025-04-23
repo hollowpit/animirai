@@ -217,6 +217,14 @@ class Toonily(Scraper):
         chapter_ids = {}
         for chapter in manga_dict.get("chapters", []):
             chapter_ids[chapter.get("title", "Chapter")] = chapter.get("id", "")
+            
+        # If we have chapters from the list view, they're incomplete
+        # We'll load all chapters when viewing manga details
+        chapters_count = len(chapter_ids)
+        if chapters_count <= 3 and manga_dict.get("url"):
+            # This is probably from list view with limited chapters
+            # Set to 999 to indicate we need to load full details
+            chapters_count = 999
 
         return Manga(
             id=manga_id,
@@ -225,7 +233,7 @@ class Toonily(Scraper):
             author=author,
             description=description,
             poster=poster,
-            chapters=len(chapter_ids),
+            chapters=chapters_count,
             chapter_ids=chapter_ids,
             tags=genres,
             genres=genres,
@@ -236,7 +244,7 @@ class Toonily(Scraper):
         manga_list = []
         
         # Try different selectors to handle different page layouts
-        manga_elements = soup.select(".page-item-detail.manga") or soup.select(".c-tabs-item .row.c-tabs-item__content")
+        manga_elements = soup.select(".c-tabs-item") or soup.select(".page-item-detail.manga")
         
         if not manga_elements:
             # If no elements found, try the search result layout
@@ -245,6 +253,8 @@ class Toonily(Scraper):
         if not manga_elements:
             # Try another common layout
             manga_elements = soup.select(".manga")
+            
+        print(f"Found {len(manga_elements)} manga elements")
         
         for element in manga_elements:
             try:
@@ -294,7 +304,7 @@ class Toonily(Scraper):
                 status_element = element.select_one(".mg_status") or element.select_one(".status")
                 status = status_element.text.strip() if status_element else "Ongoing"
                 
-                # Get chapters
+                # Get chapters - in list view we'll only get the latest few
                 chapters = []
                 latest_chapters = element.select(".chapter-item .chapter a") or element.select(".chapter a") or element.select(".list-chapter .chapter-item a")
                 for chapter in latest_chapters:
@@ -306,6 +316,10 @@ class Toonily(Scraper):
                         "title": chapter_title,
                         "url": chapter_url
                     })
+                
+                # In list view, we only get a few chapters per manga
+                # When converted to Manga object, set chapters to 999 to indicate
+                # full chapter list will be retrieved on manga details
                 
                 manga_list.append({
                     "id": manga_id,
