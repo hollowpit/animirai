@@ -158,6 +158,18 @@ class AsuraScans(Scraper):
             if thumbnail_url and not thumbnail_url.startswith("http"):
                 thumbnail_url = self.base_url + thumbnail_url
             
+            # Fetch chapter IDs
+            chapter_ids = {}
+            if manga_id:
+                manga_details = self.get_manga(manga_id)
+                if manga_details:
+                    chapter_ids = manga_details.chapter_ids
+                    chapters_count = len(chapter_ids)
+                else:
+                    chapters_count = 0
+            else:
+                chapters_count = 0
+            
             manga = Manga(
                 id=manga_id,
                 url=f"/series/{manga_id}",
@@ -165,8 +177,8 @@ class AsuraScans(Scraper):
                 author="Unknown",
                 description="",
                 poster=thumbnail_url,
-                chapters=0,
-                chapter_ids={}
+                chapters=chapters_count,
+                chapter_ids=chapter_ids
             )
             
             manga_list.append(manga)
