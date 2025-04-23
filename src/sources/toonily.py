@@ -99,9 +99,9 @@ class Toonily(Scraper):
                 result = self._parse_manga_list(soup)
                 print(f"Popular manga request found {len(result)} items")
                 return result
-        except Exception as e:
-            print(f"Error in popular_manga_request: {e}")
-            return []
+            except Exception as e:
+                print(f"Error in popular_manga_request: {e}")
+                return []
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
         manga_list = self.popular_manga_request(page)
@@ -165,9 +165,9 @@ class Toonily(Scraper):
                 result = self._parse_manga_list(soup)
                 print(f"Latest manga request found {len(result)} items")
                 return result
-        except Exception as e:
-            print(f"Error in latest_manga_request: {e}")
-            return []
+            except Exception as e:
+                print(f"Error in latest_manga_request: {e}")
+                return []
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
         manga_list = self.latest_manga_request(page)
