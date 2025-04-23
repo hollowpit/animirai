@@ -36,7 +36,7 @@ class Toonily(Scraper):
         self.manga_subpath = "serie"
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
-        url = f"{self.base_url}/{self.manga_subpath}/page/{page}/?m_orderby=views"
+        url = f"{self.base_url}/{self.manga_subpath}/page/{page}?m_orderby=views"
         
         print(f"Requesting popular manga from: {url}")
         response = self.session.get(url, headers=self.headers)
@@ -51,7 +51,7 @@ class Toonily(Scraper):
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
-        url = f"{self.base_url}/{self.manga_subpath}/page/{page}/?m_orderby=latest"
+        url = f"{self.base_url}/{self.manga_subpath}/page/{page}?m_orderby=latest"
         
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
