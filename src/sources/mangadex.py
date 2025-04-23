@@ -32,7 +32,7 @@ class MangaDex(Scraper):
         offset = (page - 1) * 12
         params = {
             "title": query,
-            "limit": 12,
+            "limit": 25,
             "offset": offset,
             "includes[]": "cover_art",
             "contentRating[]": ["safe", "suggestive", "erotica"],
@@ -141,7 +141,7 @@ class MangaDex(Scraper):
     def latest_manga(self, page: int = 1) -> List[Manga]:
         offset = (page - 1) * 12
         params = {
-            "limit": 12,
+            "limit": 25,
             "offset": offset,
             "includes[]": "cover_art",
             "contentRating[]": ["safe", "suggestive", "erotica"],
@@ -161,7 +161,7 @@ class MangaDex(Scraper):
     def popular_manga(self, page: int = 1) -> List[Manga]:
         offset = (page - 1) * 12
         params = {
-            "limit": 12,
+            "limit": 25,
             "offset": offset,
             "includes[]": "cover_art",
             "contentRating[]": ["safe", "suggestive", "erotica"],
