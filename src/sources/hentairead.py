@@ -309,9 +309,12 @@ class HentaiRead(Scraper):
             formatted_titles = "\n".join([f"- {title.strip()}" for title in alt_titles])
             description_parts.append(f"Alternative Titles: \n{formatted_titles}")
         
-        pages_element = soup.select_one(".items-center:contains(pages:)")
-        if pages_element:
-            description_parts.append(pages_element.text.strip())
+        # Find element with pages count using a more compatible approach
+        pages_elements = soup.select(".items-center")
+        for element in pages_elements:
+            if "pages:" in element.text.lower():
+                description_parts.append(element.text.strip())
+                break
         
         description = "\n\n".join(description_parts)
         
