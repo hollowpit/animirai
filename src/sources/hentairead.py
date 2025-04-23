@@ -174,7 +174,12 @@ class HentaiRead(Scraper):
         return self._convert_to_manga(manga_dict)
 
     def get_chapter(self, chapter_id: str) -> Chapter:
-        url = f"{self.base_url}/{chapter_id}/english/p/1/"
+        # Make sure we include the "english" and page part in the URL
+        if not chapter_id.endswith('/'):
+            chapter_id = f"{chapter_id}/"
+        
+        url = f"{self.base_url}/{chapter_id}english/p/1/"
+        
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
             return Chapter(
@@ -334,6 +339,7 @@ class HentaiRead(Scraper):
     def _extract_chapter_pages(self, soup: BeautifulSoup) -> List[str]:
         pages = []
         
+        # Get the base URL from the chapter-js-extra script
         chapter_extra_data = soup.select_one("#single-chapter-js-extra")
         base_url = None
         
@@ -344,16 +350,25 @@ class HentaiRead(Scraper):
                 try:
                     json_data = json.loads(match.group(1))
                     base_url = json_data.get("baseUrl")
-                except:
+                except Exception as e:
+                    print(f"Error parsing chapter extra data: {e}")
                     pass
         
+        # Get the encoded chapter data
         chapter_data = soup.select_one("#single-chapter-js-before")
-        if chapter_data:
+        if chapter_data and chapter_data.string:
             data_content = chapter_data.string
-            match = re.search(r'.(ey\S+).\s', data_content)
+            # Look for the base64 encoded data
+            match = re.search(r'[\'"]?(ey[A-Za-z0-9_-]+)[\'"]?', data_content)
+            
             if match and base_url:
                 try:
                     encoded_data = match.group(1)
+                    # Add padding if needed
+                    padding = len(encoded_data) % 4
+                    if padding:
+                        encoded_data += '=' * (4 - padding)
+                        
                     decoded_data = base64.b64decode(encoded_data).decode('utf-8')
                     json_data = json.loads(decoded_data)
                     
@@ -361,8 +376,16 @@ class HentaiRead(Scraper):
                     for image in images:
                         if image.get("src"):
                             pages.append(f"{base_url}/{image.get('src')}")
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Error decoding chapter data: {e}")
+        
+        if not pages:
+            # Fallback to direct image extraction if the JavaScript approach fails
+            image_elements = soup.select(".reading-content img")
+            for img in image_elements:
+                src = img.get("data-src") or img.get("data-lazy-src") or img.get("src")
+                if src:
+                    pages.append(src)
         
         return pages
 
