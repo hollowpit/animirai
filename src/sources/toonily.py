@@ -42,24 +42,63 @@ class Toonily(Scraper):
         }
 
     def popular_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/?m_orderby=trending"
+        # In Toonily.kt, it's using ajax for load more
         if page > 1:
-            url = f"{self.base_url}/page/{page}/?m_orderby=trending"
-        try:
-            response = self.session.get(
-                url, 
-                headers=self.headers,
-                cookies=self.cookies,
-                timeout=30
-            )
-            if response.status_code != 200:
-                print(f"Error: Status code {response.status_code} for URL {url}")
-                return []
+            # Using the madara_load_more action from Madara.kt
+            form_data = {
+                "action": "madara_load_more",
+                "page": str(page - 1),
+                "template": "madara-core/content/content-archive",
+                "vars[orderby]": "meta_value_num",
+                "vars[paged]": "1",
+                "vars[post_type]": "wp-manga",
+                "vars[post_status]": "publish",
+                "vars[meta_key]": "_wp_manga_views",
+                "vars[order]": "desc",
+                "vars[sidebar]": "right",
+                "vars[manga_archives_item_layout]": "big_thumbnail"
+            }
             
-            soup = BeautifulSoup(response.text, "html.parser")
-            result = self._parse_manga_list(soup)
-            print(f"Popular manga request found {len(result)} items")
-            return result
+            xhr_headers = self.headers.copy()
+            xhr_headers["X-Requested-With"] = "XMLHttpRequest"
+            
+            try:
+                response = self.session.post(
+                    f"{self.base_url}/wp-admin/admin-ajax.php",
+                    headers=xhr_headers,
+                    cookies=self.cookies,
+                    data=form_data,
+                    timeout=30
+                )
+                if response.status_code != 200:
+                    print(f"Error: Status code {response.status_code} for ajax request")
+                    return []
+                
+                soup = BeautifulSoup(response.text, "html.parser")
+                result = self._parse_manga_list(soup)
+                print(f"Popular manga request (ajax) found {len(result)} items")
+                return result
+            except Exception as e:
+                print(f"Error in popular_manga_request ajax: {e}")
+                return []
+        else:
+            # First page uses normal GET request
+            url = f"{self.base_url}/series/?m_orderby=views"
+            try:
+                response = self.session.get(
+                    url, 
+                    headers=self.headers,
+                    cookies=self.cookies,
+                    timeout=30
+                )
+                if response.status_code != 200:
+                    print(f"Error: Status code {response.status_code} for URL {url}")
+                    return []
+                
+                soup = BeautifulSoup(response.text, "html.parser")
+                result = self._parse_manga_list(soup)
+                print(f"Popular manga request found {len(result)} items")
+                return result
         except Exception as e:
             print(f"Error in popular_manga_request: {e}")
             return []
@@ -69,24 +108,63 @@ class Toonily(Scraper):
         return [self._convert_to_manga(manga) for manga in manga_list]
 
     def latest_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/?m_orderby=latest"
+        # In Toonily.kt, it's using ajax for load more
         if page > 1:
-            url = f"{self.base_url}/page/{page}/?m_orderby=latest"
-        try:
-            response = self.session.get(
-                url, 
-                headers=self.headers,
-                cookies=self.cookies,
-                timeout=30
-            )
-            if response.status_code != 200:
-                print(f"Error: Status code {response.status_code} for URL {url}")
-                return []
+            # Using the madara_load_more action from Madara.kt
+            form_data = {
+                "action": "madara_load_more",
+                "page": str(page - 1),
+                "template": "madara-core/content/content-archive",
+                "vars[orderby]": "meta_value_num",
+                "vars[paged]": "1",
+                "vars[post_type]": "wp-manga",
+                "vars[post_status]": "publish",
+                "vars[meta_key]": "_latest_update",
+                "vars[order]": "desc",
+                "vars[sidebar]": "right",
+                "vars[manga_archives_item_layout]": "big_thumbnail"
+            }
             
-            soup = BeautifulSoup(response.text, "html.parser")
-            result = self._parse_manga_list(soup)
-            print(f"Latest manga request found {len(result)} items")
-            return result
+            xhr_headers = self.headers.copy()
+            xhr_headers["X-Requested-With"] = "XMLHttpRequest"
+            
+            try:
+                response = self.session.post(
+                    f"{self.base_url}/wp-admin/admin-ajax.php",
+                    headers=xhr_headers,
+                    cookies=self.cookies,
+                    data=form_data,
+                    timeout=30
+                )
+                if response.status_code != 200:
+                    print(f"Error: Status code {response.status_code} for ajax request")
+                    return []
+                
+                soup = BeautifulSoup(response.text, "html.parser")
+                result = self._parse_manga_list(soup)
+                print(f"Latest manga request (ajax) found {len(result)} items")
+                return result
+            except Exception as e:
+                print(f"Error in latest_manga_request ajax: {e}")
+                return []
+        else:
+            # First page uses normal GET request
+            url = f"{self.base_url}/series/?m_orderby=latest"
+            try:
+                response = self.session.get(
+                    url, 
+                    headers=self.headers,
+                    cookies=self.cookies,
+                    timeout=30
+                )
+                if response.status_code != 200:
+                    print(f"Error: Status code {response.status_code} for URL {url}")
+                    return []
+                
+                soup = BeautifulSoup(response.text, "html.parser")
+                result = self._parse_manga_list(soup)
+                print(f"Latest manga request found {len(result)} items")
+                return result
         except Exception as e:
             print(f"Error in latest_manga_request: {e}")
             return []
@@ -103,36 +181,42 @@ class Toonily(Scraper):
             manga_details = self.manga_details_request(manga_id)
             return [manga_details] if manga_details else []
         
-        url = f"{self.base_url}/?s={urllib.parse.quote(query)}&post_type=wp-manga"
-        if page > 1:
-            url += f"&paged={page}"
+        # Replace special characters just like in Toonily.kt
+        query = re.sub(r'[^a-z0-9]+', ' ', query.lower()).strip()
+        
+        url = f"{self.base_url}/search/{page if page > 1 else ''}"
+        params = {
+            "s": query,
+            "post_type": "wp-manga"
+        }
         
         if filters:
             if "genres" in filters:
                 genres = filters["genres"].split(",")
                 for genre in genres:
-                    url += f"&genre[]={urllib.parse.quote(genre.strip())}"
+                    params[f"genre[]"] = genre.strip()
             
             if "status" in filters:
-                url += f"&status={urllib.parse.quote(filters['status'])}"
+                params["status"] = filters['status']
                 
             if "orderby" in filters:
-                url += f"&m_orderby={urllib.parse.quote(filters['orderby'])}"
+                params["m_orderby"] = filters['orderby']
         
         try:
-            print(f"Search URL: {url}")
+            full_url = url + "?" + "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
+            print(f"Search URL: {full_url}")
             response = self.session.get(
-                url, 
+                full_url, 
                 headers=self.headers,
                 cookies=self.cookies,
                 timeout=30
             )
             if response.status_code != 200:
-                print(f"Error: Status code {response.status_code} for URL {url}")
+                print(f"Error: Status code {response.status_code} for URL {full_url}")
                 return []
             
             soup = BeautifulSoup(response.text, "html.parser")
-            result = self._parse_manga_list(soup)
+            result = self._parse_search_results(soup)
             print(f"Search manga request found {len(result)} items")
             return result
         except Exception as e:
@@ -142,6 +226,78 @@ class Toonily(Scraper):
     def search_manga(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Manga]:
         manga_list = self.search_manga_request(query, page, filters)
         return [self._convert_to_manga(manga) for manga in manga_list]
+
+    def _parse_search_results(self, soup) -> List[Dict[str, Any]]:
+        manga_list = []
+        
+        # Use the selector from Toonily.kt for search
+        manga_elements = soup.select("div.c-tabs-item__content, .manga__item")
+        
+        print(f"Found {len(manga_elements)} search manga elements")
+        
+        for element in manga_elements:
+            try:
+                # Find the link
+                link_element = element.select_one("div.post-title a") or element.select_one("a")
+                if not link_element:
+                    continue
+                
+                url = link_element.get("href", "")
+                if not url:
+                    continue
+                
+                # Get ID from URL
+                manga_id = url.split("/")[-2] if url.endswith("/") else url.split("/")[-1]
+                
+                # Get title
+                title = link_element.text.strip()
+                
+                # Get thumbnail
+                thumbnail_element = element.select_one("img")
+                thumbnail_url = ""
+                if thumbnail_element:
+                    thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("data-lazy-src") or thumbnail_element.get("src") or ""
+                
+                # Remove thumbnail size suffix to get higher quality
+                if thumbnail_url:
+                    thumbnail_url = re.sub(r'-\d+x\d+(\.\w+)$', r'\1', thumbnail_url)
+                
+                # Get genres
+                genre_elements = element.select(".mg_genres .mg_genre") or element.select(".genres-content a")
+                genres = [g.text.strip() for g in genre_elements]
+                
+                # Get status
+                status_element = element.select_one(".mg_status") or element.select_one(".status")
+                status = status_element.text.strip() if status_element else "Ongoing"
+                
+                # Get chapters
+                chapters = []
+                latest_chapters = element.select(".chapter-item .chapter a") or element.select(".chapter a")
+                for chapter in latest_chapters:
+                    chapter_url = chapter.get("href", "")
+                    chapter_id = chapter_url.split("/")[-2] if chapter_url.endswith("/") else chapter_url.split("/")[-1]
+                    chapter_title = chapter.text.strip()
+                    chapters.append({
+                        "id": chapter_id,
+                        "title": chapter_title,
+                        "url": chapter_url
+                    })
+                
+                manga_list.append({
+                    "id": manga_id,
+                    "title": title,
+                    "url": url,
+                    "thumbnail_url": thumbnail_url,
+                    "description": "",
+                    "genres": genres,
+                    "status": status,
+                    "chapters": chapters
+                })
+            except Exception as e:
+                print(f"Error parsing search manga: {e}")
+                continue
+        
+        return manga_list
 
     def manga_details_request(self, manga_id: str) -> Dict[str, Any]:
         if manga_id.isdigit():
@@ -162,7 +318,8 @@ class Toonily(Scraper):
         return self._parse_manga_details(soup, manga_id)
 
     def get_chapter(self, chapter_id: str) -> Chapter:
-        url = f"{self.base_url}/{chapter_id}"
+        # Add the style=list query parameter as done in Toonily.kt
+        url = f"{self.base_url}/{chapter_id}?style=list"
         response = self.session.get(
             url, 
             headers=self.headers,
@@ -182,13 +339,28 @@ class Toonily(Scraper):
         title_element = soup.select_one(".c-breadcrumb .breadcrumb li:last-child")
         title = title_element.text.strip() if title_element else "Chapter"
         
-        # Get pages
+        # Get pages using the same selector from Madara.kt
         pages = []
-        containers = soup.select(".reading-content .page-break")
+        containers = soup.select("div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img")
         for container in containers:
-            img_element = container.select_one("img")
+            img_element = container.select_one("img") or container
             if img_element:
-                img_url = img_element.get("data-src") or img_element.get("src")
+                # Use same image extraction logic as in Madara.kt
+                img_url = None
+                if img_element.has_attr("data-src"):
+                    img_url = img_element.get("data-src")
+                elif img_element.has_attr("data-lazy-src"):
+                    img_url = img_element.get("data-lazy-src")
+                elif img_element.has_attr("srcset"):
+                    srcset = img_element.get("srcset")
+                    # Get the highest quality image from srcset
+                    if srcset:
+                        srcset_urls = [url.strip().split(" ")[0] for url in srcset.split(",") if url.strip()]
+                        if srcset_urls:
+                            img_url = srcset_urls[-1]  # Last one is usually highest quality
+                elif img_element.has_attr("src"):
+                    img_url = img_element.get("src")
+                
                 if img_url:
                     # Fix relative URLs
                     if img_url.startswith("/"):
@@ -243,16 +415,9 @@ class Toonily(Scraper):
     def _parse_manga_list(self, soup) -> List[Dict[str, Any]]:
         manga_list = []
         
-        # Try different selectors to handle different page layouts
-        manga_elements = soup.select(".c-tabs-item") or soup.select(".page-item-detail.manga")
-        
-        if not manga_elements:
-            # If no elements found, try the search result layout
-            manga_elements = soup.select(".c-tabs-item .row.c-tabs-item__content") or soup.select(".row.c-tabs-item__content")
-        
-        if not manga_elements:
-            # Try another common layout
-            manga_elements = soup.select(".manga")
+        # Use the same selector as Toonily.kt (from the Madara parent class)
+        # "div.page-item-detail:not(:has(a[href*='bilibilicomics.com'])).manga"
+        manga_elements = soup.select("div.page-item-detail.manga, .manga__item")
             
         print(f"Found {len(manga_elements)} manga elements")
         
