@@ -79,9 +79,34 @@ class Comick(Scraper):
 
     def manga_details(self, manga_id: str) -> Manga:
         manga_dict = self.manga_details_request(manga_id)
-        return self._convert_to_manga(manga_dict, with_chapters=True)
+        return self._convert_to_manga(manga_dict)
+        
+    def get_chapter(self, chapter_id: str) -> Chapter:
+        """Get chapter data with pages using chapter ID."""
+        chapter_data = self._get_pages(chapter_id)
+        page_urls = [page.get("url", "") for page in chapter_data]
+        
+        # Get chapter title/name from ID if possible
+        chapter_url = f"{self.api_url}/chapter/{chapter_id}"
+        params = {"tachiyomi": "true"}
+        
+        response = self._make_request(chapter_url, params=params)
+        title = f"Chapter {chapter_id}"
+        
+        if response and response.get("chapter"):
+            chap_data = response.get("chapter", {})
+            vol_str = chap_data.get("vol", "")
+            chap_str = chap_data.get("chap", "")
+            name = chap_data.get("title", "")
+            title = self._beautify_chapter_name(vol_str or "", chap_str or "", name)
+        
+        return Chapter(
+            title=title,
+            pages=page_urls,
+            id=chapter_id
+        )
 
-    def _convert_to_manga(self, manga_dict: Dict[str, Any], with_chapters: bool = False) -> Manga:
+    def _convert_to_manga(self, manga_dict: Dict[str, Any]) -> Manga:
         if not manga_dict:
             return None
 
@@ -95,21 +120,12 @@ class Comick(Scraper):
         status = manga_dict.get("status", "Ongoing")
         genres = manga_dict.get("genres", [])
 
-        chapter_and_pages = {}
-
-        if with_chapters:
-            chapter_list = self._get_chapters(manga_dict)
-            chapter_and_pages = {"chapters": []}
-
-            for chapter in chapter_list:
-                pages = self._get_pages(chapter)
-                page_urls = [page.get("url", "") for page in pages]
-
-                chapter_and_pages["chapters"].append({
-                    "title": chapter.get("name", f"Chapter {chapter.get('chapter_number', '?')}"),
-                    "total_pages": len(pages),
-                    "pages": page_urls
-                })
+        # Only get chapter IDs and titles
+        chapter_list = self._get_chapters(manga_dict)
+        chapter_ids = {}
+        
+        for chapter in chapter_list:
+            chapter_ids[chapter.get("name", f"Chapter {chapter.get('chapter_number', '?')}")] = chapter.get("id", "")
 
         return Manga(
             id=manga_id,
@@ -118,8 +134,8 @@ class Comick(Scraper):
             author=author,
             description=description,
             poster=poster,
-            chapters=len(chapter_and_pages.get("chapters", [])) if with_chapters else 0,
-            chapter_and_pages=chapter_and_pages,
+            chapters=len(chapter_ids),
+            chapter_ids=chapter_ids,
             tags=genres,
             genres=genres,
             status=status
