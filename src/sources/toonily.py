@@ -16,7 +16,7 @@ class Toonily(Scraper):
             name="Toonily",
             url="https://toonily.com",
             api_url="https://toonily.com",
-            scraper_version="1.0.0"
+            scraper_version="1.0.1"
         )
         self.available_filters = self._get_filters()
         self.available_qualities = []
@@ -43,17 +43,24 @@ class Toonily(Scraper):
 
     def popular_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/manga/page/{page}/?m_orderby=trending"
-        response = self.session.get(
-            url, 
-            headers=self.headers,
-            cookies=self.cookies,
-            timeout=30
-        )
-        if response.status_code != 200:
+        try:
+            response = self.session.get(
+                url, 
+                headers=self.headers,
+                cookies=self.cookies,
+                timeout=30
+            )
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code} for URL {url}")
+                return []
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            result = self._parse_manga_list(soup)
+            print(f"Popular manga request found {len(result)} items")
+            return result
+        except Exception as e:
+            print(f"Error in popular_manga_request: {e}")
             return []
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        return self._parse_manga_list(soup)
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
         manga_list = self.popular_manga_request(page)
@@ -61,17 +68,24 @@ class Toonily(Scraper):
 
     def latest_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/manga/page/{page}/?m_orderby=latest"
-        response = self.session.get(
-            url, 
-            headers=self.headers,
-            cookies=self.cookies,
-            timeout=30
-        )
-        if response.status_code != 200:
+        try:
+            response = self.session.get(
+                url, 
+                headers=self.headers,
+                cookies=self.cookies,
+                timeout=30
+            )
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code} for URL {url}")
+                return []
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            result = self._parse_manga_list(soup)
+            print(f"Latest manga request found {len(result)} items")
+            return result
+        except Exception as e:
+            print(f"Error in latest_manga_request: {e}")
             return []
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        return self._parse_manga_list(soup)
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
         manga_list = self.latest_manga_request(page)
@@ -100,18 +114,26 @@ class Toonily(Scraper):
                 
             if "orderby" in filters:
                 url += f"&m_orderby={urllib.parse.quote(filters['orderby'])}"
-                
-        response = self.session.get(
-            url, 
-            headers=self.headers,
-            cookies=self.cookies,
-            timeout=30
-        )
-        if response.status_code != 200:
-            return []
         
-        soup = BeautifulSoup(response.text, "html.parser")
-        return self._parse_manga_list(soup)
+        try:
+            print(f"Search URL: {url}")
+            response = self.session.get(
+                url, 
+                headers=self.headers,
+                cookies=self.cookies,
+                timeout=30
+            )
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code} for URL {url}")
+                return []
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            result = self._parse_manga_list(soup)
+            print(f"Search manga request found {len(result)} items")
+            return result
+        except Exception as e:
+            print(f"Error in search_manga_request: {e}")
+            return []
 
     def search_manga(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Manga]:
         manga_list = self.search_manga_request(query, page, filters)
@@ -208,11 +230,22 @@ class Toonily(Scraper):
 
     def _parse_manga_list(self, soup) -> List[Dict[str, Any]]:
         manga_list = []
-        manga_elements = soup.select(".c-tabs-item .row.c-tabs-item__content")
+        
+        # Try different selectors to handle different page layouts
+        manga_elements = soup.select(".page-item-detail.manga") or soup.select(".c-tabs-item .row.c-tabs-item__content")
+        
+        if not manga_elements:
+            # If no elements found, try the search result layout
+            manga_elements = soup.select(".c-tabs-item .row.c-tabs-item__content") or soup.select(".row.c-tabs-item__content")
+        
+        if not manga_elements:
+            # Try another common layout
+            manga_elements = soup.select(".manga")
         
         for element in manga_elements:
             try:
-                link_element = element.select_one(".tab-thumb a")
+                # Find the link - try different possible selectors
+                link_element = element.select_one(".tab-thumb a") or element.select_one("a.thumb") or element.select_one(".entry-title a") or element.select_one("a")
                 if not link_element:
                     continue
                 
@@ -223,13 +256,15 @@ class Toonily(Scraper):
                 # Get ID from URL
                 manga_id = url.split("/")[-2] if url.endswith("/") else url.split("/")[-1]
                 
-                # Get title
-                title_element = element.select_one(".post-title h3 a")
+                # Get title - try different possible selectors
+                title_element = element.select_one(".post-title h3 a") or element.select_one(".entry-title a") or element.select_one("h3 a") or link_element
                 title = title_element.text.strip() if title_element else "Unknown"
                 
                 # Get thumbnail
-                thumbnail_element = link_element.select_one("img")
-                thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("src") if thumbnail_element else ""
+                thumbnail_element = link_element.select_one("img") or element.select_one("img")
+                thumbnail_url = ""
+                if thumbnail_element:
+                    thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("data-lazy-src") or thumbnail_element.get("src") or ""
                 
                 # Remove thumbnail size suffix to get higher quality
                 if thumbnail_url:
@@ -239,20 +274,25 @@ class Toonily(Scraper):
                 description = ""
                 
                 # Get genres
-                genre_elements = element.select(".mg_genres .mg_genre")
+                genre_elements = element.select(".mg_genres .mg_genre") or element.select(".genres-content a")
                 genres = [g.text.strip() for g in genre_elements]
                 
                 # Get rating
-                rating_element = element.select_one(".score")
-                rating = float(rating_element.text.strip()) if rating_element else 0.0
+                rating_element = element.select_one(".score") or element.select_one(".rating-score")
+                rating = 0.0
+                if rating_element:
+                    try:
+                        rating = float(rating_element.text.strip())
+                    except ValueError:
+                        rating = 0.0
                 
                 # Get status
-                status_element = element.select_one(".mg_status")
+                status_element = element.select_one(".mg_status") or element.select_one(".status")
                 status = status_element.text.strip() if status_element else "Ongoing"
                 
                 # Get chapters
                 chapters = []
-                latest_chapters = element.select(".chapter-item .chapter a")
+                latest_chapters = element.select(".chapter-item .chapter a") or element.select(".chapter a") or element.select(".list-chapter .chapter-item a")
                 for chapter in latest_chapters:
                     chapter_url = chapter.get("href", "")
                     chapter_id = chapter_url.split("/")[-2] if chapter_url.endswith("/") else chapter_url.split("/")[-1]
@@ -274,7 +314,8 @@ class Toonily(Scraper):
                     "rating": rating,
                     "chapters": chapters
                 })
-            except Exception:
+            except Exception as e:
+                print(f"Error parsing manga: {e}")
                 continue
         
         return manga_list
@@ -287,18 +328,20 @@ class Toonily(Scraper):
             
             # Get URL
             url = soup.select_one('link[rel="canonical"]')
-            url = url.get("href", "") if url else ""
+            url = url.get("href", "") if url else f"{self.base_url}/serie/{manga_id}"
             
             # Get thumbnail
             thumbnail_element = soup.select_one(".summary_image img")
-            thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("src") if thumbnail_element else ""
+            thumbnail_url = ""
+            if thumbnail_element:
+                thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("data-lazy-src") or thumbnail_element.get("src") or ""
             
             # Remove thumbnail size suffix to get higher quality
             if thumbnail_url:
                 thumbnail_url = re.sub(r'-\d+x\d+(\.\w+)$', r'\1', thumbnail_url)
             
             # Get description
-            description_element = soup.select_one(".summary__content .description-summary")
+            description_element = soup.select_one(".summary__content .description-summary") or soup.select_one(".summary__content")
             description = description_element.text.strip() if description_element else ""
             
             # Get genres
@@ -315,7 +358,7 @@ class Toonily(Scraper):
             
             # Get chapters
             chapters = []
-            chapter_elements = soup.select(".wp-manga-chapter")
+            chapter_elements = soup.select(".wp-manga-chapter") or soup.select(".main.version-chap li")
             for chapter in chapter_elements:
                 link = chapter.select_one("a")
                 if not link:
@@ -326,7 +369,7 @@ class Toonily(Scraper):
                 chapter_title = link.text.strip()
                 
                 # Get release date if available
-                date_element = chapter.select_one(".chapter-release-date")
+                date_element = chapter.select_one(".chapter-release-date") or chapter.select_one(".chapter-time")
                 release_date = date_element.text.strip() if date_element else ""
                 
                 chapters.append({
@@ -336,7 +379,7 @@ class Toonily(Scraper):
                     "release_date": release_date
                 })
             
-            return {
+            result = {
                 "id": manga_id,
                 "title": title,
                 "url": url,
@@ -347,7 +390,10 @@ class Toonily(Scraper):
                 "status": status,
                 "chapters": chapters
             }
-        except Exception:
+            print(f"Parsed manga details: {title} with {len(chapters)} chapters")
+            return result
+        except Exception as e:
+            print(f"Error parsing manga details: {e}")
             return {
                 "id": manga_id,
                 "title": "Unknown",
