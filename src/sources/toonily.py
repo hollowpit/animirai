@@ -42,7 +42,9 @@ class Toonily(Scraper):
         }
 
     def popular_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/manga/page/{page}/?m_orderby=trending"
+        url = f"{self.base_url}/?m_orderby=trending"
+        if page > 1:
+            url = f"{self.base_url}/page/{page}/?m_orderby=trending"
         try:
             response = self.session.get(
                 url, 
@@ -67,7 +69,9 @@ class Toonily(Scraper):
         return [self._convert_to_manga(manga) for manga in manga_list]
 
     def latest_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/manga/page/{page}/?m_orderby=latest"
+        url = f"{self.base_url}/?m_orderby=latest"
+        if page > 1:
+            url = f"{self.base_url}/page/{page}/?m_orderby=latest"
         try:
             response = self.session.get(
                 url, 
