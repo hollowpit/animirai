@@ -216,7 +216,11 @@ class Toonily(Scraper):
                 thumbnail_url = self.sd_cover_regex.sub(r"\1", thumbnail_url)
             
             # Get chapters for this manga
-            chapters = self._fetch_chapter_list(manga_id)
+            chapters = {}
+            try:
+                chapters = self._fetch_chapter_list(manga_id)
+            except Exception:
+                pass
             
             manga = {
                 "id": manga_id,
@@ -256,7 +260,11 @@ class Toonily(Scraper):
                 thumbnail_url = self.sd_cover_regex.sub(r"\1", thumbnail_url)
             
             # Get chapters for this manga
-            chapters = self._fetch_chapter_list(manga_id)
+            chapters = {}
+            try:
+                chapters = self._fetch_chapter_list(manga_id)
+            except Exception:
+                pass
             
             manga = {
                 "id": manga_id,
@@ -363,38 +371,46 @@ class Toonily(Scraper):
     def _fetch_chapter_list(self, manga_id: str) -> Dict[str, str]:
         """Fetch chapters for a manga using its ID"""
         chapters = {}
-        try:
-            # Make sure URL uses the correct manga subdirectory
-            url = f"{self.base_url}/{self.manga_sub_string}/{manga_id}/"
+        
+        # Make sure URL uses the correct manga subdirectory
+        url = f"{self.base_url}/{self.manga_sub_string}/{manga_id}/"
+        
+        response = self.session.get(url, headers=self.headers, cookies=self.cookie)
+        if response.status_code != 200:
+            return chapters
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        chapters_wrapper = soup.select("div[id^=manga-chapters-holder]")
+        
+        if chapters_wrapper:
+            ajax_url = f"{url}ajax/chapters"
             
-            response = self.session.get(url, headers=self.headers, cookies=self.cookie)
-            if response.status_code != 200:
-                return chapters
+            ajax_response = self.session.post(
+                ajax_url, 
+                headers={**self.headers, "X-Requested-With": "XMLHttpRequest"}, 
+                cookies=self.cookie
+            )
             
-            soup = BeautifulSoup(response.text, "html.parser")
-            chapters_wrapper = soup.select("div[id^=manga-chapters-holder]")
-            
-            if chapters_wrapper:
-                ajax_url = f"{url}/ajax/chapters"
+            if ajax_response.status_code == 200:
+                chapters_soup = BeautifulSoup(ajax_response.text, "html.parser")
+                chapter_elements = chapters_soup.select("li.wp-manga-chapter")
                 
-                ajax_response = self.session.post(
-                    ajax_url, 
-                    headers={**self.headers, "X-Requested-With": "XMLHttpRequest"}, 
-                    cookies=self.cookie
-                )
-                
-                if ajax_response.status_code == 200:
-                    chapters_soup = BeautifulSoup(ajax_response.text, "html.parser")
-                    chapter_elements = chapters_soup.select("li.wp-manga-chapter")
-                    
-                    for element in chapter_elements:
-                        chapter_link = element.select_one("a")
-                        if chapter_link:
-                            chapter_url = chapter_link.get("href", "").replace(self.base_url, "")
-                            chapter_name = chapter_link.text.strip()
-                            chapters[chapter_name] = chapter_url
-        except Exception:
-            pass
+                for element in chapter_elements:
+                    chapter_link = element.select_one("a")
+                    if chapter_link:
+                        chapter_url = chapter_link.get("href", "").replace(self.base_url, "")
+                        chapter_name = chapter_link.text.strip()
+                        chapters[chapter_name] = chapter_url
+        
+        # If we didn't get chapters from AJAX, try to get them directly from the page
+        if not chapters:
+            chapter_elements = soup.select("li.wp-manga-chapter")
+            for element in chapter_elements:
+                chapter_link = element.select_one("a")
+                if chapter_link:
+                    chapter_url = chapter_link.get("href", "").replace(self.base_url, "")
+                    chapter_name = chapter_link.text.strip()
+                    chapters[chapter_name] = chapter_url
             
         return chapters
         
