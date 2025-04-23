@@ -543,3 +543,70 @@ class Toonily(Scraper):
                 {"name": "Webtoons", "value": "webtoons"},
             ]
         }
+
+
+    def download_chapter(self, chapter_id: str, output_dir: str = "test_img") -> bool:
+        """Download all images from a chapter to the specified directory
+        
+        Args:
+            chapter_id: The chapter ID to download
+            output_dir: Directory to save images to (default: test_img)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        import os
+        import requests
+        from pathlib import Path
+        
+        # Get chapter info
+        chapter = self.get_chapter(chapter_id)
+        if not chapter.pages:
+            print(f"Error: No pages found for chapter {chapter_id}")
+            return False
+            
+        # Create directory structure
+        chapter_dir = Path(output_dir) / chapter_id.replace("/", "_")
+        chapter_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"Downloading {len(chapter.pages)} images from {chapter.title} to {chapter_dir}")
+        
+        # Download each image
+        for i, image_url in enumerate(chapter.pages):
+            if not image_url:
+                continue
+                
+            # Determine file extension from URL
+            ext = image_url.split(".")[-1].lower()
+            if ext not in ["jpg", "jpeg", "png", "gif", "webp"]:
+                ext = "jpg"  # Default to jpg if extension can't be determined
+                
+            # Create filename with padding (001.jpg, 002.jpg, etc.)
+            filename = f"{i+1:03d}.{ext}"
+            filepath = chapter_dir / filename
+            
+            try:
+                # Random delay to avoid being detected as a bot
+                time.sleep(1 + 2 * random.random())
+                
+                # Download the image with referer header
+                img_headers = {
+                    "User-Agent": self.headers["User-Agent"],
+                    "Referer": f"{self.base_url}/{chapter_id}",
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                }
+                
+                response = requests.get(image_url, headers=img_headers, stream=True, timeout=30)
+                if response.status_code == 200:
+                    with open(filepath, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    print(f"Downloaded {filename} ({i+1}/{len(chapter.pages)})")
+                else:
+                    print(f"Failed to download {filename}: HTTP {response.status_code}")
+            except Exception as e:
+                print(f"Error downloading {filename}: {str(e)}")
+        
+        print(f"Chapter download completed: {chapter.title}")
+        return True
+
