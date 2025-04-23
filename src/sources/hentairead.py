@@ -259,16 +259,16 @@ class HentaiRead(Scraper):
         title_element = soup.select_one("h1")
         title = title_element.text.strip() if title_element else f"Gallery #{manga_id}"
         
-        authors_elements = soup.select("a[href*=/circle/] span:first-of-type")
+        authors_elements = soup.select(f"a[href*=/circle/] span:first-of-type")
         authors = [author.text.strip() for author in authors_elements]
         
-        artists_elements = soup.select("a[href*=/artist/] span:first-of-type")
+        artists_elements = soup.select(f"a[href*=/artist/] span:first-of-type")
         artists = [artist.text.strip() for artist in artists_elements]
         
         author = ", ".join(authors) or ", ".join(artists)
         artist = ", ".join(artists) or ", ".join(authors)
         
-        tags_elements = soup.select("a[href*=/tag/] span:first-of-type")
+        tags_elements = soup.select(f"a[href*=/tag/] span:first-of-type")
         tags = [tag.text.strip() for tag in tags_elements]
         
         thumbnail_element = soup.select_one(".c-manga-cover img")
