@@ -423,7 +423,7 @@ class Comick(Scraper):
                     chapter.get("title", "")
                 ),
                 "uploaded": self._parse_date(chapter.get("created_at", "")),
-                "scanlator": ", ".join(chapter.get("group_name", [])) or "Unknown",
+                "scanlator": chapter.get("group_name", ["Unknown"])[0] if chapter.get("group_name") else "Unknown",
                 "chapter_number": float(chap_str) if chap_is_digit else 0,
                 "volume": float(vol_str) if vol_is_digit else None,
             }
