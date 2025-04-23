@@ -1,4 +1,3 @@
-
 import json
 import re
 import time
@@ -90,28 +89,28 @@ class Comick(Scraper):
         author = manga_dict.get("author", "Unknown")
         description = manga_dict.get("description", "")
         poster = manga_dict.get("thumbnail_url", "")
-        
+
         manga_id = manga_dict.get("id", "")
         manga_url = manga_dict.get("url", "")
         status = manga_dict.get("status", "Ongoing")
         genres = manga_dict.get("genres", [])
-        
+
         chapter_and_pages = {}
-        
+
         if with_chapters:
             chapter_list = self._get_chapters(manga_dict)
             chapter_and_pages = {"chapters": []}
-            
+
             for chapter in chapter_list:
                 pages = self._get_pages(chapter)
                 page_urls = [page.get("url", "") for page in pages]
-                
+
                 chapter_and_pages["chapters"].append({
                     "title": chapter.get("name", f"Chapter {chapter.get('chapter_number', '?')}"),
                     "total_pages": len(pages),
                     "pages": page_urls
                 })
-        
+
         return Manga(
             id=manga_id,
             url=manga_url if manga_url else f"{self.base_url}/comic/{manga_id}",
@@ -128,12 +127,12 @@ class Comick(Scraper):
 
     def _search_manga_request(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         filters = filters or {}
-        
+
         if query.startswith("id:"):
             slug_or_hid = query[3:]
             manga_details = self._get_manga_details({"url": f"/comic/{slug_or_hid}#"})
             return [manga_details] if manga_details else []
-        
+
         if query:
             url = f"{self.api_url}/v1.0/search"
             params = {
@@ -142,11 +141,11 @@ class Comick(Scraper):
                 "page": 1,
                 "tachiyomi": "true"
             }
-            
+
             response = self._make_request(url, params=params)
             if not response:
                 return []
-            
+
             manga_list = []
             for item in response:
                 manga = {
@@ -156,36 +155,36 @@ class Comick(Scraper):
                     "thumbnail_url": self._parse_cover(item.get("cover_url"), item.get("md_covers", []))
                 }
                 manga_list.append(manga)
-            
+
             return manga_list
-        
+
         url = f"{self.api_url}/v1.0/search"
         params = {
             "limit": 300,
             "page": 1,
             "tachiyomi": "true"
         }
-        
+
         self._apply_filters(params, filters)
-        
+
         if self.preferences["ignored_tags"]:
             ignored_tags = self.preferences["ignored_tags"].split(",")
             for tag in ignored_tags:
                 if tag.strip():
                     params.setdefault("excluded-tags", []).append(self._format_tag(tag.strip()))
-        
+
         all_results = []
         current_page = 1
         has_next_page = True
-        
+
         while has_next_page and current_page <= 2:
             params["page"] = current_page
             response = self._make_request(url, params=params)
-            
+
             if not response or len(response) == 0:
                 has_next_page = False
                 break
-                
+
             for item in response:
                 manga = {
                     "id": item.get("hid", ""),
@@ -196,37 +195,37 @@ class Comick(Scraper):
                     "status": self._parse_status(item.get("status"), item.get("translation_completed"))
                 }
                 all_results.append(manga)
-            
+
             if len(response) < params["limit"]:
                 has_next_page = False
             else:
                 current_page += 1
-        
+
         return all_results
 
     def _get_manga_details(self, manga: Dict[str, Any]) -> Dict[str, Any]:
         if not manga['url'].endswith("#"):
             return {}
-        
+
         manga_url = manga['url'].rstrip("#")
         url = f"{self.api_url}{manga_url}"
         params = {"tachiyomi": "true"}
-        
+
         response = self._make_request(url, params=params)
         if not response:
             return {}
-        
+
         comic_data = response.get("comic", {})
         authors_data = response.get("authors", [])
         artists_data = response.get("artists", [])
         genres_data = response.get("genres", [])
         demographic = response.get("demographic")
-        
+
         title_lang = self.lang.lower() if self.preferences["local_title"] else "all"
-        
+
         alt_titles = comic_data.get("md_titles", [])
         entry_title = comic_data.get("title", "Unknown")
-        
+
         for alt in alt_titles:
             if (title_lang != "all" and 
                 alt.get("lang") and 
@@ -234,73 +233,73 @@ class Comick(Scraper):
                 alt.get("title")):
                 entry_title = alt["title"]
                 break
-        
+
         cover_url = comic_data.get("cover_url")
         md_covers = comic_data.get("md_covers", [])
-        
+
         if not self.preferences["update_cover"] and manga.get("thumbnail_url") != cover_url:
             covers_url = f"{self.api_url}/comic/{comic_data.get('slug') or comic_data.get('hid')}/covers"
             covers_params = {"tachiyomi": "true"}
             covers_response = self._make_request(covers_url, params=covers_params)
-            
+
             if covers_response:
                 all_covers = covers_response.get("md_covers", [])[::-1]
                 first_vol_covers = [c for c in all_covers if c.get("vol") == "1"]
                 if not first_vol_covers:
                     first_vol_covers = all_covers
-                
+
                 iso_lang = comic_data.get("iso639_1", "")
                 original_covers = [c for c in first_vol_covers if iso_lang and iso_lang.startswith(c.get("locale", ""))]
                 local_covers = [c for c in first_vol_covers if self.lang.startswith(c.get("locale", ""))]
-                
+
                 selected_covers = local_covers or original_covers or first_vol_covers
                 md_covers = selected_covers
-        
+
         score_position = self.preferences["score_position"]
         description = ""
-        
+
         fancy_score = ""
         if comic_data.get("bayesian_rating"):
             score = float(comic_data["bayesian_rating"])
             stars = round(score / 2)
             fancy_score = "★" * stars + "☆" * (5 - stars) + f" {score}"
-        
+
         if score_position == "top" and fancy_score:
             description += fancy_score
-        
+
         if comic_data.get("desc"):
             desc = self._beautify_description(comic_data["desc"])
             if description:
                 description += "\n\n"
             description += desc
-        
+
         if score_position == "middle" and fancy_score:
             if description:
                 description += "\n\n"
             description += fancy_score
-        
+
         if self.preferences["show_alternative_titles"] and alt_titles:
             all_titles = [{"title": comic_data.get("title")}] + alt_titles
             alt_title_list = []
-            
+
             for title in all_titles:
                 if title.get("title") and title.get("title") != entry_title:
                     alt_title_list.append(f"• {title['title']}")
-            
+
             if alt_title_list:
                 if description:
                     description += "\n\n"
                 description += "Alternative Titles:\n" + "\n".join(alt_title_list)
-        
+
         if score_position == "bottom" and fancy_score:
             if description:
                 description += "\n\n"
             description += fancy_score
-        
+
         status = self._parse_status(comic_data.get("status"), comic_data.get("translation_completed"))
-        
+
         genres = []
-        
+
         country = comic_data.get("country")
         if country == "jp":
             genres.append({"group": "Origination", "name": "Manga"})
@@ -308,10 +307,10 @@ class Comick(Scraper):
             genres.append({"group": "Origination", "name": "Manhwa"})
         elif country == "cn":
             genres.append({"group": "Origination", "name": "Manhua"})
-        
+
         if demographic:
             genres.append({"group": "Demographic", "name": demographic})
-        
+
         md_genres = comic_data.get("md_comic_md_genres", [])
         for genre in md_genres:
             md_genre = genre.get("md_genres")
@@ -320,40 +319,40 @@ class Comick(Scraper):
                     "group": md_genre.get("group", ""),
                     "name": md_genre.get("name", "")
                 })
-        
+
         for genre in genres_data:
             if genre.get("name"):
                 genres.append({
                     "group": genre.get("group", ""),
                     "name": genre.get("name", "")
                 })
-        
+
         if self.preferences["include_mu_tags"]:
             mu_comics = comic_data.get("mu_comics", {})
             mu_categories = mu_comics.get("mu_comic_categories", [])
-            
+
             for category in mu_categories:
                 if category and category.get("mu_categories") and category["mu_categories"].get("title"):
                     genres.append({
                         "group": "Category",
                         "name": category["mu_categories"]["title"]
                     })
-        
+
         formatted_genres = []
         genres = [g for g in genres if g.get("name") and g.get("group")]
         genres.sort(key=lambda x: (x.get("name", ""), x.get("group", "")))
-        
+
         for genre in genres:
             if self.preferences["group_tags"]:
                 formatted_genres.append(f"{genre['group']}:{genre['name'].strip()}")
             else:
                 formatted_genres.append(genre['name'].strip())
-        
+
         formatted_genres = list(dict.fromkeys(formatted_genres))
-        
+
         authors = [a.get("name", "").strip() for a in authors_data if a.get("name")]
         artists = [a.get("name", "").strip() for a in artists_data if a.get("name")]
-        
+
         result = {
             "id": comic_data.get("hid", ""),
             "url": manga_url + "#",
@@ -367,52 +366,54 @@ class Comick(Scraper):
             "hid": comic_data.get("hid", ""),
             "slug": comic_data.get("slug"),
         }
-        
+
         return result
 
     def _get_chapters(self, manga: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not manga['url'].endswith("#"):
             return []
-        
+
         manga_url = manga['url'].rstrip("#")
         url = f"{self.api_url}{manga_url}/chapters"
-        
+
         params = {
             "tachiyomi": "true",
             "limit": str(self.chapters_limit)
         }
-        
+
         if self.lang != "all":
             params["lang"] = self.lang
-        
+
         response = self._make_request(url, params=params)
         if not response:
             return []
-        
+
         chapters_data = response.get("chapters", [])
         current_timestamp = int(time.time() * 1000)
-        
+
         chapters = []
         for chapter in chapters_data:
             publish_time = self._parse_date(chapter.get("publish_at", ""))
             if publish_time > current_timestamp:
                 continue
-            
-            chapter_groups = [g.lower() for g in chapter.get("group_name", [])]
+
+            # Check if group is in ignored groups
+            group_names = chapter.get("group_name", []) or []
+            chapter_groups = [g.lower() for g in group_names]
             if any(g in self.preferences["ignored_groups"] for g in chapter_groups):
                 continue
-            
+
             chap_str = chapter.get("chap", "0")
             vol_str = chapter.get("vol", "0")
-            
+
             chap_is_digit = False
             if chap_str is not None:
                 chap_is_digit = chap_str.replace(".", "", 1).isdigit()
-            
+
             vol_is_digit = False
             if vol_str is not None:
                 vol_is_digit = vol_str.replace(".", "", 1).isdigit()
-            
+
             chapter_data = {
                 "id": chapter.get("hid", ""),
                 "url": f"{manga_url}/{chapter.get('hid', '')}-chapter-{chap_str or ''}-{chapter.get('lang', '')}",
@@ -426,11 +427,11 @@ class Comick(Scraper):
                 "chapter_number": float(chap_str) if chap_is_digit else 0,
                 "volume": float(vol_str) if vol_is_digit else None,
             }
-            
+
             chapters.append(chapter_data)
-        
+
         chapters.sort(key=lambda x: (x.get("volume", 0) or 0, x.get("chapter_number", 0) or 0), reverse=True)
-        
+
         return chapters
 
     def _get_pages(self, chapter: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -438,24 +439,24 @@ class Comick(Scraper):
             chapter_hid = chapter["url"].split("/")[-1].split("-")[0]
         else:
             chapter_hid = chapter
-            
+
         url = f"{self.api_url}/chapter/{chapter_hid}"
         params = {"tachiyomi": "true"}
-        
+
         response = self._make_request(url, params=params)
         if not response:
             return []
-        
+
         chapter_data = response.get("chapter", {})
         images = chapter_data.get("images", [])
-        
+
         if not images:
             params["_"] = str(int(time.time() * 1000))
             response = self._make_request(url, params=params)
             if response:
                 chapter_data = response.get("chapter", {})
                 images = chapter_data.get("images", [])
-        
+
         pages = []
         for i, img in enumerate(images):
             if img.get("url"):
@@ -463,7 +464,7 @@ class Comick(Scraper):
                     "index": i,
                     "url": img["url"]
                 })
-        
+
         return pages
 
     def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None, method: str = "GET", retries: int = 3) -> Any:
@@ -476,13 +477,13 @@ class Comick(Scraper):
                             query_params.append((key, item))
                     else:
                         query_params.append((key, value))
-                
+
                 url_parts = list(urllib.parse.urlparse(url))
                 query = urllib.parse.urlencode(query_params, doseq=True)
                 url_parts[4] = query
                 url = urllib.parse.urlunparse(url_parts)
                 params = None
-            
+
             last_error = None
             for attempt in range(retries):
                 try:
@@ -494,67 +495,67 @@ class Comick(Scraper):
                         timeout=30
                     )
                     response.raise_for_status()
-                    
+
                     data = response.json()
-                    
+
                     if isinstance(data, dict) and "statusCode" in data and "message" in data:
                         return None
-                    
+
                     return data
-                    
+
                 except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
                     last_error = e
                     wait_time = 2 ** attempt
                     time.sleep(wait_time)
-            
+
             return None
-            
+
         except Exception:
             return None
 
     def _apply_filters(self, params: Dict[str, Any], filters: Dict[str, Any]):
         if "sort" in filters:
             params["sort"] = filters["sort"]
-        
+
         if "country" in filters:
             params["country"] = filters["country"]
-        
+
         if "demographic" in filters:
             params["demographic"] = filters["demographic"]
-        
+
         if "status" in filters:
             params["status"] = filters["status"]
-        
+
         if "content_rating" in filters:
             params["content_rating"] = filters["content_rating"]
-        
+
         if "completed" in filters and filters["completed"]:
             params["completed"] = "true"
-        
+
         if "time" in filters:
             params["time"] = filters["time"]
-        
+
         if "minimum" in filters:
             params["minimum"] = filters["minimum"]
-        
+
         if "from" in filters:
             params["from"] = filters["from"]
-            
+
         if "to" in filters:
             params["to"] = filters["to"]
-        
+
         if "genres" in filters:
             params["genres"] = filters["genres"]
-        
+
         if "excludes" in filters:
             params["excludes"] = filters["excludes"]
-        
+
         if "tags" in filters:
             for tag in filters["tags"].split(","):
                 tag = tag.strip()
                 if tag:
                     params.setdefault("tags", []).append(self._format_tag(tag))
-        
+
         if "excluded_tags" in filters:
             for tag in filters["excluded_tags"].split(","):
                 tag = tag.strip()
@@ -569,28 +570,28 @@ class Comick(Scraper):
     def _parse_cover(self, thumbnail_url: Optional[str], md_covers: List[Dict[str, Any]]) -> Optional[str]:
         b2key = None
         vol = ""
-        
+
         for cover in md_covers:
             if cover.get("b2key"):
                 b2key = cover["b2key"]
                 vol = cover.get("vol", "")
                 break
-        
+
         if not b2key or not thumbnail_url:
             return thumbnail_url
-        
+
         return f"{thumbnail_url.rsplit('/', 1)[0]}/{b2key}#{vol}"
 
     def _beautify_description(self, description: str) -> str:
         description = description.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-        
+
         if "---" in description:
             description = description.split("---")[0]
-        
+
         description = re.sub(r'\[([^]]+)]\(([^)]+)\)', r'\1', description)
         description = re.sub(r'\*+\s*([^*]*)\s*\*+', r'\1', description)
         description = re.sub(r'_+\s*([^_]*)\s*_+', r'\1', description)
-        
+
         return description.strip()
 
     def _parse_status(self, status: Optional[int], translation_complete: Optional[bool]) -> str:
@@ -610,36 +611,36 @@ class Comick(Scraper):
 
     def _beautify_chapter_name(self, vol: str, chap: str, title: str) -> str:
         result = []
-        
+
         if vol:
             if not chap:
                 result.append(f"Volume {vol}")
             else:
                 result.append(f"Vol. {vol}")
-        
+
         if chap:
             if not vol:
                 result.append(f"Chapter {chap}")
             else:
                 result.append(f"Ch. {chap}")
-        
+
         if title:
             if not chap:
                 result.append(title)
             else:
                 result.append(f": {title}")
-        
+
         return "".join(result)
 
     def _parse_date(self, date_string: str) -> int:
         if not date_string:
             return 0
-        
+
         try:
             dt_format = "%Y-%m-%dT%H:%M:%S.%fZ"
             if "." not in date_string:
                 dt_format = "%Y-%m-%dT%H:%M:%SZ"
-            
+
             dt = datetime.strptime(date_string, dt_format)
             return int(dt.timestamp() * 1000)
         except Exception:
@@ -771,7 +772,7 @@ class Comick(Scraper):
             {"title": "1 year", "value": "365"},
         ]
 
-    def _get_sorts_list(self) -> List[Dict[str, str]]:
+    def _get_sorts_list() -> List[Dict[str, str]]:
         return [
             {"title": "Most popular", "value": "follow"},
             {"title": "Most follows", "value": "user_follow_count"},
