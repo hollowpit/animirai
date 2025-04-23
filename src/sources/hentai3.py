@@ -297,9 +297,11 @@ class Hentai3(Scraper):
         if languages_text:
             description_parts.append(f"Languages: {languages_text}")
         
-        pages_element = soup.select_one("div.tag-container:contains(pages:)")
-        if pages_element:
-            description_parts.append(pages_element.text.strip())
+        pages_elements = soup.select("div.tag-container")
+        for element in pages_elements:
+            if "pages:" in element.text:
+                description_parts.append(element.text.strip())
+                break
         
         description = "\n\n".join(description_parts)
         
