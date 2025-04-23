@@ -158,7 +158,7 @@ class Toonily(Scraper):
         for index, image in enumerate(images):
             image_url = image.get("data-src") or image.get("src") or ""
             if image_url and "images/default-image" not in image_url:
-                pages.append(image_url)
+                pages.append(image_url.replace("\t", ''))
         
         return Chapter(
             title=title,
