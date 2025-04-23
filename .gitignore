@@ -1,4 +1,6 @@
-attached_assests
+attached_assets
 .git
 .pythpnlibs
 .replit
+src/lib/__pycache__
+src/sources/__pycache__
