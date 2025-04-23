@@ -36,7 +36,7 @@ class Toonily(Scraper):
         self.manga_subpath = "serie"
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
-        url = f"{self.base_url}/{self.manga_subpath}/page/{page}?m_orderby=views"
+        url = f"{self.base_url}/{self.manga_subpath}/page/{page}/?m_orderby=views"
         
         print(f"Requesting popular manga from: {url}")
         response = self.session.get(url, headers=self.headers)
@@ -160,6 +160,8 @@ class Toonily(Scraper):
         genres = re.findall(genres_pattern, html, re.DOTALL)
         chapters = re.findall(chapter_list_pattern, html, re.DOTALL)
         
+        print(f"Found {len(chapters)} chapters in HTML")
+        
         title = title_match.group(1) if title_match else ""
         author = author_match.group(1) if author_match else ""
         description = desc_match.group(1).strip() if desc_match else ""
@@ -173,7 +175,29 @@ class Toonily(Scraper):
         rating = float(rating_match.group(1)) if rating_match else -1.0
         
         chapter_ids = {}
+        
+        # Try alternative chapter pattern if the first one doesn't work
+        if not chapters:
+            print("Trying alternative chapter pattern...")
+            alt_chapter_pattern = r'<div\s+class="wp-manga-chapter[^"]*">\s*<a\s+href="([^"]+)"[^>]*>(.*?)</a>'
+            chapters = re.findall(alt_chapter_pattern, html, re.DOTALL)
+            print(f"Found {len(chapters)} chapters with alternative pattern")
+        
+        # Try another alternative pattern focused on reading-list
+        if not chapters:
+            print("Trying reading-list chapter pattern...")
+            list_chapter_pattern = r'<div\s+class="listing-chapters_wrap">\s*.*?<ul\s+class="main version-chap">(.*?)</ul>'
+            list_match = re.search(list_chapter_pattern, html, re.DOTALL)
+            if list_match:
+                chapter_list_html = list_match.group(1)
+                chapter_item_pattern = r'<li[^>]*>\s*<a\s+href="([^"]+)"[^>]*>(.*?)</a>'
+                chapters = re.findall(chapter_item_pattern, chapter_list_html, re.DOTALL)
+                print(f"Found {len(chapters)} chapters with reading-list pattern")
+        
         for chapter_url, chapter_title in chapters:
+            # Print debug information
+            print(f"Processing chapter URL: {chapter_url}")
+            
             # Extract chapter ID from URL
             chapter_parts = chapter_url.rstrip('/').split('/')
             if len(chapter_parts) >= 2:
@@ -199,17 +223,29 @@ class Toonily(Scraper):
     def get_chapter(self, chapter_id: str) -> Chapter:
         url = f"{self.base_url}/{chapter_id}"
         
+        print(f"Requesting chapter from: {url}")
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
+            print(f"Error: Status code {response.status_code}")
             return None
             
         html = response.text
+        print(f"Response received for chapter, length: {len(html)}")
         
         title_pattern = r'<ol class="breadcrumb">.*?<li class="active">(.*?)</li>'
-        img_pattern = r'<div class="page-break\s*(?:no-gaps)?">\s*<img[^>]*data-src="([^"]*)"[^>]*>'
+        img_pattern = r'<div class="page-break\s*(?:no-gaps)?">\s*<img[^>]*(?:data-src|src)="([^"]*)"[^>]*>'
         
         title_match = re.search(title_pattern, html, re.DOTALL)
         images = re.findall(img_pattern, html, re.DOTALL)
+        
+        print(f"Found {len(images)} images in chapter")
+        
+        # Try alternative pattern if no images found
+        if not images:
+            print("Trying alternative image pattern...")
+            alt_img_pattern = r'<div class="reading-content">\s*.*?<img[^>]*(?:data-src|src)="([^"]*)"[^>]*>'
+            images = re.findall(alt_img_pattern, html, re.DOTALL)
+            print(f"Found {len(images)} images with alternative pattern")
         
         title = title_match.group(1).strip() if title_match else f"Chapter {chapter_id}"
         
