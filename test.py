@@ -1,9 +1,9 @@
 
 import sys
 
-from src.sources.toonily import Toonily
+#from src.sources.toonily import Toonily
 from src.sources.hentairead import HentaiRead
-
+Toonily="n"
 def test_toonily():
     print("Testing Toonily scraper...")
     
@@ -118,6 +118,6 @@ def test_hentairead():
             print("Failed to retrieve manga details")
 
 if __name__ == "__main__":
-    test_toonily()
+    #test_toonily()
     # Uncomment to test HentaiRead
-    # test_hentairead()
+    test_hentairead()
