@@ -140,7 +140,7 @@ class Toonily(Scraper):
         status_pattern = r'<div class="post-status">.*?<div class="summary-content">(.*?)</div>'
         rating_pattern = r'<div class="post-rating">.*?<span class="score">(.*?)</span>'
         genres_pattern = r'<div class="genres-content">.*?<a[^>]*>(.*?)</a>'
-        chapter_list_pattern = r'<li class="wp-manga-chapter">\s*<a href="([^"]+)">(.*?)</a>'
+        chapter_list_pattern = r'<li\s+class="wp-manga-chapter[^"]*">\s*<a\s+href="([^"]+)"[^>]*>(.*?)</a>'
         
         title_match = re.search(title_pattern, html, re.DOTALL)
         author_match = re.search(author_pattern, html, re.DOTALL)
@@ -166,8 +166,12 @@ class Toonily(Scraper):
         
         chapter_ids = {}
         for chapter_url, chapter_title in chapters:
-            chapter_id = chapter_url.split("/")[-2]
-            chapter_ids[chapter_title.strip()] = chapter_id
+            # Extract chapter ID from URL
+            chapter_parts = chapter_url.rstrip('/').split('/')
+            if len(chapter_parts) >= 2:
+                chapter_id = chapter_parts[-2]
+                clean_title = re.sub(r'<[^>]+>', '', chapter_title).strip()
+                chapter_ids[clean_title] = chapter_id
         
         return Manga(
             id=manga_id,
@@ -185,7 +189,7 @@ class Toonily(Scraper):
         )
         
     def get_chapter(self, chapter_id: str) -> Chapter:
-        url = f"{self.base_url}/{self.manga_subpath}/{chapter_id}"
+        url = f"{self.base_url}/{chapter_id}"
         
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
