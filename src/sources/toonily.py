@@ -25,23 +25,29 @@ class Toonily(Scraper):
         self.headers = {
             "Referer": f"{self.base_url}/",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
+            "Accept": "text/html,application/xhtml+xml,application/xml",
             "Accept-Language": "en-US,en;q=0.9",
             "Origin": self.base_url,
             "Connection": "keep-alive",
-            "Cookie": "toonily-mature=1"
         }
+        
+        # Set mature content cookie
+        self.session.cookies.set("toonily-mature", "1", domain="toonily.com")
         self.manga_subpath = "serie"
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
         url = f"{self.base_url}/{self.manga_subpath}/page/{page}/?m_orderby=views"
         
+        print(f"Requesting popular manga from: {url}")
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
+            print(f"Error: Status code {response.status_code}")
             return []
             
         html = response.text
+        print(f"Response received, length: {len(html)}")
         manga_items = self._extract_manga_items(html)
+        print(f"Extracted {len(manga_items)} manga items")
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
@@ -68,12 +74,13 @@ class Toonily(Scraper):
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def _extract_manga_items(self, html: str) -> List[Dict[str, str]]:
-        pattern = r'<div class="page-item-detail\s+manga">.*?<a href="([^"]+)".*?>.*?<img[^>]*data-src="([^"]+)".*?>.*?<h3 class="h5">.*?<a href="[^"]+"[^>]*>(.*?)</a>'
+        pattern = r'<div\s+class="page-item-detail\s+manga">\s*<div\s+class="item-thumb\s+c-image-hover">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<h3\s+class="h5">\s*<a[^>]*>(.*?)</a>'
         matches = re.findall(pattern, html, re.DOTALL)
         
         manga_items = []
         for url, img_url, title in matches:
             img_url = self._process_cover_url(img_url)
+            title = re.sub(r'<[^>]+>', '', title).strip()
             manga_items.append({
                 "url": url,
                 "title": title,
@@ -83,13 +90,14 @@ class Toonily(Scraper):
         return manga_items
 
     def _extract_search_items(self, html: str) -> List[Dict[str, str]]:
-        pattern = r'<div class="row c-tabs-item__content">.*?<div class="col-4">.*?<a href="([^"]+)".*?>.*?<img[^>]*data-src="([^"]+)".*?>.*?</a>.*?</div>.*?<div class="col-8">.*?<div class="post-title">.*?<a[^>]*>(.*?)</a>'
+        pattern = r'<div\s+class="row\s+c-tabs-item__content">\s*<div\s+class="col-4[^"]*">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<div\s+class="post-title">\s*<a[^>]*>(.*?)</a>'
         
         matches = re.findall(pattern, html, re.DOTALL)
         
         manga_items = []
         for url, img_url, title in matches:
             img_url = self._process_cover_url(img_url)
+            title = re.sub(r'<[^>]+>', '', title).strip()
             manga_items.append({
                 "url": url,
                 "title": title,
