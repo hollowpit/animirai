@@ -1,3 +1,5 @@
+import requests
+import os
 
 class Manga():
     def __init__(self, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
@@ -88,3 +90,11 @@ class Anime():
             "rating": self.rating,
             "episodes_and_videos": self._episodes_and_videos_model
         }
+
+class Scraper():
+    def __init__(self, name="Missing Name", url="Missing Url", api_url=None, scraper_version="1.0.0"):
+        self.base_url = url
+        self.api_url = api_url
+        self.scraper_version = scraper_version
+        self.available_filters = {}
+        self.available_qualities = []
