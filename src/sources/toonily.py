@@ -56,7 +56,7 @@ class Toonily(Scraper):
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def search_manga(self, query: str, page: int = 1) -> List[Manga]:
-        query = re.sub(r'[^a-z0-9]+', ' ', query.lower()).strip()
+        query = re.sub(r'[^a-zA-Z0-9]+', ' ', query).strip()
         url = f"{self.base_url}/?s={query}&post_type=wp-manga"
         
         response = self.session.get(url, headers=self.headers)
@@ -68,28 +68,24 @@ class Toonily(Scraper):
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def _extract_manga_items(self, html: str) -> List[Dict[str, str]]:
-        title_pattern = r'<div class="post-title">.*?<a href="(.*?)">(.*?)</a>.*?</div>'
-        img_pattern = r'<img[^>]*data-src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>'
-        
-        titles = re.findall(title_pattern, html, re.DOTALL)
-        images = re.findall(img_pattern, html, re.DOTALL)
+        pattern = r'<div class="page-item-detail\s+manga">.*?<a href="([^"]+)".*?>.*?<img[^>]*data-src="([^"]+)".*?>.*?<h3 class="h5">.*?<a href="[^"]+"[^>]*>(.*?)</a>'
+        matches = re.findall(pattern, html, re.DOTALL)
         
         manga_items = []
-        for i, (url, title) in enumerate(titles):
-            if i < len(images):
-                img_url = self._process_cover_url(images[i][0])
-                manga_items.append({
-                    "url": url,
-                    "title": title,
-                    "img_url": img_url
-                })
+        for url, img_url, title in matches:
+            img_url = self._process_cover_url(img_url)
+            manga_items.append({
+                "url": url,
+                "title": title,
+                "img_url": img_url
+            })
                 
         return manga_items
 
     def _extract_search_items(self, html: str) -> List[Dict[str, str]]:
-        search_pattern = r'<div class="row c-tabs-item__content">.*?<div class="col-4">.*?<a href="(.*?)">.*?<img[^>]*data-src="([^"]*)"[^>]*>.*?</a>.*?</div>.*?<div class="col-8">.*?<div class="post-title">.*?<a href=".*?">(.*?)</a>'
+        pattern = r'<div class="row c-tabs-item__content">.*?<div class="col-4">.*?<a href="([^"]+)".*?>.*?<img[^>]*data-src="([^"]+)".*?>.*?</a>.*?</div>.*?<div class="col-8">.*?<div class="post-title">.*?<a[^>]*>(.*?)</a>'
         
-        matches = re.findall(search_pattern, html, re.DOTALL)
+        matches = re.findall(pattern, html, re.DOTALL)
         
         manga_items = []
         for url, img_url, title in matches:
@@ -139,7 +135,7 @@ class Toonily(Scraper):
         
         title_pattern = r'<div class="post-title">.*?<h1>(.*?)</h1>'
         author_pattern = r'<div class="author-content">.*?<a[^>]*>(.*?)</a>'
-        desc_pattern = r'<div class="description-summary">.*?<div class="summary__content">(.*?)</div>'
+        desc_pattern = r'<div class="description-summary">.*?<div class="summary__content[^"]*">(.*?)</div>'
         img_pattern = r'<div class="summary_image">.*?<img[^>]*data-src="([^"]*)"[^>]*>'
         status_pattern = r'<div class="post-status">.*?<div class="summary-content">(.*?)</div>'
         rating_pattern = r'<div class="post-rating">.*?<span class="score">(.*?)</span>'
@@ -189,7 +185,7 @@ class Toonily(Scraper):
         )
         
     def get_chapter(self, chapter_id: str) -> Chapter:
-        url = f"{self.base_url}/webtoon/{chapter_id}"
+        url = f"{self.base_url}/{self.manga_subpath}/{chapter_id}"
         
         response = self.session.get(url, headers=self.headers)
         if response.status_code != 200:
