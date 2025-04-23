@@ -221,7 +221,7 @@ class Hentai3(Scraper):
 
     def _extract_manga_list(self, soup):
         manga_list = []
-        manga_elements = soup.select("a[href*=/d/]")
+        manga_elements = soup.select("a[href*='/d/']")
         
         for element in manga_elements:
             title_element = element.select_one("div")
