@@ -1,7 +1,5 @@
 from src.sources.comickio import Comick
 scraper = Comick()
 mangas = scraper.popular_manga()
-for manga in mangas:
-    print(manga.url)
-
-print(len(mangas))
+manga = scraper.manga_details(mangas[5].id)
+print(manga.get())
