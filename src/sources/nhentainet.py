@@ -49,7 +49,7 @@ class NHentaiNet(Scraper):
         }
 
     def popular_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        print(f"🔍 Getting popular doujinshi (page {page})...")
+        
         try:
             url = f"{self.base_url}/popular"
             if page > 1:
@@ -65,7 +65,7 @@ class NHentaiNet(Scraper):
             soup = BeautifulSoup(response.text, "html.parser")
             return self._parse_search_results(soup)
         except Exception as e:
-            print(f"❌ Error getting popular manga: {e}")
+            pass
             return []
 
     def popular_manga(self, page: int = 1) -> List[Manga]:
@@ -73,7 +73,7 @@ class NHentaiNet(Scraper):
         return [self._convert_to_manga(manga) for manga in manga_list]
 
     def latest_manga_request(self, page: int = 1) -> List[Dict[str, Any]]:
-        print(f"🔍 Getting latest doujinshi (page {page})...")
+        
         try:
             url = self.base_url
             if page > 1:
@@ -89,7 +89,7 @@ class NHentaiNet(Scraper):
             soup = BeautifulSoup(response.text, "html.parser")
             return self._parse_search_results(soup)
         except Exception as e:
-            print(f"❌ Error getting latest manga: {e}")
+            pass
             return []
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
@@ -97,7 +97,7 @@ class NHentaiNet(Scraper):
         return [self._convert_to_manga(manga) for manga in manga_list]
 
     def search_manga_request(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        print(f"🔍 Searching for doujin: '{query}'...")
+        
         
         filters = filters or {}
         
@@ -157,7 +157,7 @@ class NHentaiNet(Scraper):
             return all_results
             
         except Exception as e:
-            print(f"❌ Error searching nhentai: {e}")
+            pass
             return []
 
     def search_manga(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Manga]:
@@ -165,7 +165,7 @@ class NHentaiNet(Scraper):
         return [self._convert_to_manga(manga) for manga in manga_list]
 
     def manga_details_request(self, manga_id: str) -> Dict[str, Any]:
-        print(f"🔍 Getting doujin details for ID: {manga_id}")
+        
         
         try:
             response = self.session.get(
@@ -196,7 +196,7 @@ class NHentaiNet(Scraper):
             return self._parse_manga_details_json(data, manga_id)
             
         except Exception as e:
-            print(f"❌ Error getting manga details: {e}")
+            pass
             return {}
 
     def get_chapter(self, chapter_id: str) -> Chapter:
@@ -298,7 +298,7 @@ class NHentaiNet(Scraper):
                 results.append(manga)
                 
             except Exception as e:
-                print(f"Error processing a search result: {e}")
+                pass
                 continue
         
         return results
@@ -448,7 +448,7 @@ class NHentaiNet(Scraper):
             return manga_details
             
         except Exception as e:
-            print(f"❌ Error parsing HTML details: {e}")
+            pass
             return {
                 "id": manga_id,
                 "url": f"/g/{manga_id}/",
@@ -504,10 +504,10 @@ class NHentaiNet(Scraper):
                                 "url": f"https://i{media_server}.nhentai.net/galleries/{media_id}/{i + 1}.{extension}"
                             })
                     except Exception as e:
-                        print(f"Error processing JSON data: {e}")
+                        pass
             
             if not pages_data:
-                print("Falling back to HTML parsing for pages...")
+                
                 thumb_element = soup.select_one("#cover img")
                 if thumb_element:
                     thumb_url = thumb_element.get("data-src") or thumb_element.get("src") or ""
@@ -552,7 +552,7 @@ class NHentaiNet(Scraper):
             return pages_data
             
         except Exception as e:
-            print(f"❌ Error getting pages: {e}")
+            pass
             return []
 
     def _get_filters(self) -> Dict[str, Any]:
