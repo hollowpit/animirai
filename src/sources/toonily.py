@@ -39,16 +39,47 @@ class Toonily(Scraper):
         url = f"{self.base_url}/{self.manga_subpath}/page/{page}/?m_orderby=views"
         
         print(f"Requesting popular manga from: {url}")
-        response = self.session.get(url, headers=self.headers)
-        if response.status_code != 200:
-            print(f"Error: Status code {response.status_code}")
-            return []
+        try:
+            response = self.session.get(url, headers=self.headers)
+            print(f"Status code: {response.status_code}")
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code}")
+                return []
+                
+            html = response.text
+            print(f"Response received, length: {len(html)}")
             
-        html = response.text
-        print(f"Response received, length: {len(html)}")
-        manga_items = self._extract_manga_items(html)
-        print(f"Extracted {len(manga_items)} manga items")
-        return [self._create_manga_from_element(item) for item in manga_items]
+            # Check if we got a CloudFlare challenge
+            if "cloudflare" in html.lower() and "challenge" in html.lower():
+                print("Detected CloudFlare challenge, attempting to bypass...")
+                # Wait a bit and retry
+                time.sleep(2)
+                response = self.session.get(url, headers=self.headers)
+                html = response.text
+                print(f"Second attempt status: {response.status_code}, length: {len(html)}")
+            
+            # Save the HTML to inspect later if needed
+            with open("toonily_response.html", "w", encoding="utf-8") as f:
+                f.write(html[:10000])  # Save first 10k chars to avoid huge files
+                
+            manga_items = self._extract_manga_items(html)
+            print(f"Extracted {len(manga_items)} manga items")
+            
+            # Try alternative URL if first attempt yields no results
+            if not manga_items:
+                print("Trying alternative URL format...")
+                alt_url = f"{self.base_url}/webtoons/page/{page}/?m_orderby=views"
+                print(f"Requesting from: {alt_url}")
+                response = self.session.get(alt_url, headers=self.headers)
+                html = response.text
+                print(f"Alt response status: {response.status_code}, length: {len(html)}")
+                manga_items = self._extract_manga_items(html)
+                print(f"Extracted {len(manga_items)} manga items from alt URL")
+                
+            return [self._create_manga_from_element(item) for item in manga_items]
+        except Exception as e:
+            print(f"Error in popular_manga: {str(e)}")
+            return []
 
     def latest_manga(self, page: int = 1) -> List[Manga]:
         url = f"{self.base_url}/{self.manga_subpath}/page/{page}?m_orderby=latest"
@@ -74,35 +105,102 @@ class Toonily(Scraper):
         return [self._create_manga_from_element(item) for item in manga_items]
 
     def _extract_manga_items(self, html: str) -> List[Dict[str, str]]:
-        pattern = r'<div\s+class="page-item-detail\s+manga">\s*<div\s+class="item-thumb\s+c-image-hover">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<h3\s+class="h5">\s*<a[^>]*>(.*?)</a>'
-        matches = re.findall(pattern, html, re.DOTALL)
+        # Print a small sample of the HTML for debugging
+        print(f"HTML sample (first 500 chars): {html[:500]}")
+        
+        # Try different patterns to match the current Toonily site structure
+        patterns = [
+            # Original pattern
+            r'<div\s+class="page-item-detail\s+manga">\s*<div\s+class="item-thumb\s+c-image-hover">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<h3\s+class="h5">\s*<a[^>]*>(.*?)</a>',
+            
+            # Alternative pattern focusing on manga item structure
+            r'<div\s+class="page-item-detail\s+manga">\s*<div\s+class="item-thumb[^"]*">\s*<a\s+href="([^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<h3\s+class="h5">\s*<a[^>]*>(.*?)</a>',
+            
+            # Simplified pattern
+            r'<div\s+class="item-thumb[^"]*">\s*<a\s+href="([^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<h3\s+class="h5">\s*<a[^>]*>(.*?)</a>'
+        ]
         
         manga_items = []
-        for url, img_url, title in matches:
-            img_url = self._process_cover_url(img_url)
-            title = re.sub(r'<[^>]+>', '', title).strip()
-            manga_items.append({
-                "url": url,
-                "title": title,
-                "img_url": img_url
-            })
-                
+        for pattern_idx, pattern in enumerate(patterns):
+            matches = re.findall(pattern, html, re.DOTALL)
+            print(f"Pattern {pattern_idx+1} found {len(matches)} matches")
+            
+            if matches:
+                for url, img_url, title in matches:
+                    img_url = self._process_cover_url(img_url)
+                    title = re.sub(r'<[^>]+>', '', title).strip()
+                    manga_items.append({
+                        "url": url,
+                        "title": title,
+                        "img_url": img_url
+                    })
+                break  # If we found matches, no need to try other patterns
+        
+        # If all patterns failed, try a very loose pattern as last resort
+        if not manga_items:
+            print("Trying fallback pattern...")
+            fallback_pattern = r'<a\s+href="([^"]+/(?:serie|webtoon)/[^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<a[^>]*>(.*?)</a>'
+            matches = re.findall(fallback_pattern, html, re.DOTALL)
+            print(f"Fallback pattern found {len(matches)} matches")
+            
+            for url, img_url, title in matches:
+                if "/serie/" in url or "/webtoon/" in url:  # Ensure it's a manga URL
+                    img_url = self._process_cover_url(img_url)
+                    title = re.sub(r'<[^>]+>', '', title).strip()
+                    manga_items.append({
+                        "url": url,
+                        "title": title,
+                        "img_url": img_url
+                    })
+        
         return manga_items
 
     def _extract_search_items(self, html: str) -> List[Dict[str, str]]:
-        pattern = r'<div\s+class="row\s+c-tabs-item__content">\s*<div\s+class="col-4[^"]*">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<div\s+class="post-title">\s*<a[^>]*>(.*?)</a>'
+        print(f"Search HTML sample (first 500 chars): {html[:500]}")
         
-        matches = re.findall(pattern, html, re.DOTALL)
+        # Multiple patterns to try for search results
+        patterns = [
+            # Original pattern
+            r'<div\s+class="row\s+c-tabs-item__content">\s*<div\s+class="col-4[^"]*">\s*<a\s+href="([^"]+)"[^>]*>\s*<img\s+(?:class="[^"]*"\s+)?(?:data-src|src)="([^"]+)"[^>]*>.*?<div\s+class="post-title">\s*<a[^>]*>(.*?)</a>',
+            
+            # Alternative pattern for search results
+            r'<div\s+class="row\s+c-tabs-item__content">\s*.*?<a\s+href="([^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<div\s+class="post-title">\s*<a[^>]*>(.*?)</a>',
+            
+            # Simplified search pattern
+            r'<div\s+class="c-tabs-item__content">\s*.*?<a\s+href="([^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<div\s+class="post-title">\s*<a[^>]*>(.*?)</a>'
+        ]
         
         manga_items = []
-        for url, img_url, title in matches:
-            img_url = self._process_cover_url(img_url)
-            title = re.sub(r'<[^>]+>', '', title).strip()
-            manga_items.append({
-                "url": url,
-                "title": title,
-                "img_url": img_url
-            })
+        for pattern_idx, pattern in enumerate(patterns):
+            matches = re.findall(pattern, html, re.DOTALL)
+            print(f"Search pattern {pattern_idx+1} found {len(matches)} matches")
+            
+            if matches:
+                for url, img_url, title in matches:
+                    img_url = self._process_cover_url(img_url)
+                    title = re.sub(r'<[^>]+>', '', title).strip()
+                    manga_items.append({
+                        "url": url,
+                        "title": title,
+                        "img_url": img_url
+                    })
+                break  # If we found matches, no need to try other patterns
+        
+        # If all patterns failed, try a more generic approach
+        if not manga_items:
+            print("Trying generic search pattern...")
+            generic_pattern = r'<a\s+href="([^"]+/(?:serie|webtoon)/[^"]+)"[^>]*>.*?<img\s+[^>]*(?:data-src|src)="([^"]+)"[^>]*>.*?<h3[^>]*>.*?<a[^>]*>(.*?)</a>'
+            matches = re.findall(generic_pattern, html, re.DOTALL)
+            print(f"Generic search pattern found {len(matches)} matches")
+            
+            for url, img_url, title in matches:
+                img_url = self._process_cover_url(img_url)
+                title = re.sub(r'<[^>]+>', '', title).strip()
+                manga_items.append({
+                    "url": url,
+                    "title": title,
+                    "img_url": img_url
+                })
                 
         return manga_items
 
