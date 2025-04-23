@@ -6,7 +6,7 @@ import requests
 import cloudscraper
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from src.lib.types import Scraper, Manga
+from src.lib.types import Scraper, Manga, Chapter
 
 class Comick(Scraper):
     def __init__(self):
@@ -153,7 +153,7 @@ class Comick(Scraper):
             url = f"{self.api_url}/v1.0/search"
             params = {
                 "q": query.strip(),
-                "limit": 300,
+                "limit": 25,
                 "page": 1,
                 "tachiyomi": "true"
             }
@@ -176,7 +176,7 @@ class Comick(Scraper):
 
         url = f"{self.api_url}/v1.0/search"
         params = {
-            "limit": 300,
+            "limit": 25,
             "page": 1,
             "tachiyomi": "true"
         }
