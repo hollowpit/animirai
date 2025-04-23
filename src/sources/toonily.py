@@ -303,48 +303,81 @@ class Toonily(Scraper):
         if manga_id.isdigit():
             url = f"{self.base_url}/manga?p={manga_id}"
         else:
+            # Try both serie and webtoon paths as Toonily uses both
             url = f"{self.base_url}/serie/{manga_id}"
         
-        response = self.session.get(
-            url, 
-            headers=self.headers,
-            cookies=self.cookies,
-            timeout=30
-        )
-        if response.status_code != 200:
-            return {}
+        print(f"Loading manga details from URL: {url}")
         
-        soup = BeautifulSoup(response.text, "html.parser")
-        return self._parse_manga_details(soup, manga_id)
+        try:
+            response = self.session.get(
+                url, 
+                headers=self.headers,
+                cookies=self.cookies,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code} for URL {url}")
+                # Try the webtoon path as fallback
+                fallback_url = f"{self.base_url}/webtoon/{manga_id}"
+                print(f"Trying fallback URL: {fallback_url}")
+                
+                response = self.session.get(
+                    fallback_url,
+                    headers=self.headers,
+                    cookies=self.cookies,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    print(f"Error: Status code {response.status_code} for fallback URL")
+                    return {}
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            return self._parse_manga_details(soup, manga_id)
+        except Exception as e:
+            print(f"Error in manga_details_request: {e}")
+            return {}
 
     def get_chapter(self, chapter_id: str) -> Chapter:
         # Add the style=list query parameter as done in Toonily.kt
-        url = f"{self.base_url}/{chapter_id}?style=list"
-        response = self.session.get(
-            url, 
-            headers=self.headers,
-            cookies=self.cookies,
-            timeout=30
-        )
-        if response.status_code != 200:
-            return Chapter(
-                title="Error loading chapter",
-                pages=[],
-                id=chapter_id
+        url = f"{self.base_url}/webtoon/{chapter_id}?style=list"
+        print(f"Loading chapter from URL: {url}")
+        
+        try:
+            response = self.session.get(
+                url, 
+                headers=self.headers,
+                cookies=self.cookies,
+                timeout=30
             )
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        # Get chapter title
-        title_element = soup.select_one(".c-breadcrumb .breadcrumb li:last-child")
-        title = title_element.text.strip() if title_element else "Chapter"
-        
-        # Get pages using the same selector from Madara.kt
-        pages = []
-        containers = soup.select("div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img")
-        for container in containers:
-            img_element = container.select_one("img") or container
-            if img_element:
+            
+            if response.status_code != 200:
+                print(f"Error: Status code {response.status_code} for chapter URL {url}")
+                return Chapter(
+                    title="Error loading chapter",
+                    pages=[],
+                    id=chapter_id
+                )
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # Get chapter title
+            title_element = soup.select_one(".c-breadcrumb .breadcrumb li:last-child") or soup.select_one(".entry-title")
+            title = title_element.text.strip() if title_element else "Chapter"
+            
+            # Get pages using the same selector from Madara.kt
+            pages = []
+            # Try various selectors used in Madara-based sites
+            containers = soup.select(".reading-content img")
+            if not containers:
+                containers = soup.select("div.page-break img, li.blocks-gallery-item img, .reading-content .text-left img")
+            if not containers:
+                containers = soup.select(".entry-content img")
+            
+            print(f"Found {len(containers)} image containers")
+            
+            for img_element in containers:
                 # Use same image extraction logic as in Madara.kt
                 img_url = None
                 if img_element.has_attr("data-src"):
@@ -355,7 +388,7 @@ class Toonily(Scraper):
                     srcset = img_element.get("srcset")
                     # Get the highest quality image from srcset
                     if srcset:
-                        srcset_urls = [url.strip().split(" ")[0] for url in srcset.split(",") if url.strip()]
+                        srcset_urls = [u.strip().split(" ")[0] for u in srcset.split(",") if u.strip()]
                         if srcset_urls:
                             img_url = srcset_urls[-1]  # Last one is usually highest quality
                 elif img_element.has_attr("src"):
@@ -365,13 +398,24 @@ class Toonily(Scraper):
                     # Fix relative URLs
                     if img_url.startswith("/"):
                         img_url = f"{self.base_url}{img_url}"
+                    elif not img_url.startswith(("http:", "https:")):
+                        img_url = f"{self.base_url}/{img_url}"
                     pages.append(img_url)
-        
-        return Chapter(
-            title=title,
-            pages=pages,
-            id=chapter_id
-        )
+            
+            print(f"Extracted {len(pages)} page URLs")
+            
+            return Chapter(
+                title=title,
+                pages=pages,
+                id=chapter_id
+            )
+        except Exception as e:
+            print(f"Error loading chapter: {e}")
+            return Chapter(
+                title="Error loading chapter",
+                pages=[],
+                id=chapter_id
+            )
 
     def _convert_to_manga(self, manga_dict: Dict[str, Any]) -> Manga:
         if not manga_dict:
@@ -506,15 +550,15 @@ class Toonily(Scraper):
     def _parse_manga_details(self, soup, manga_id: str) -> Dict[str, Any]:
         try:
             # Get title
-            title_element = soup.select_one(".post-title h1")
+            title_element = soup.select_one(".post-title h1") or soup.select_one(".entry-title")
             title = title_element.text.strip() if title_element else "Unknown"
             
             # Get URL
-            url = soup.select_one('link[rel="canonical"]')
-            url = url.get("href", "") if url else f"{self.base_url}/serie/{manga_id}"
+            url_element = soup.select_one('link[rel="canonical"]')
+            url = url_element.get("href", "") if url_element else f"{self.base_url}/serie/{manga_id}"
             
             # Get thumbnail
-            thumbnail_element = soup.select_one(".summary_image img")
+            thumbnail_element = soup.select_one(".summary_image img") or soup.select_one(".tab-summary img")
             thumbnail_url = ""
             if thumbnail_element:
                 thumbnail_url = thumbnail_element.get("data-src") or thumbnail_element.get("data-lazy-src") or thumbnail_element.get("src") or ""
@@ -524,7 +568,7 @@ class Toonily(Scraper):
                 thumbnail_url = re.sub(r'-\d+x\d+(\.\w+)$', r'\1', thumbnail_url)
             
             # Get description
-            description_element = soup.select_one(".summary__content .description-summary") or soup.select_one(".summary__content")
+            description_element = soup.select_one(".summary__content .description-summary") or soup.select_one(".summary__content") or soup.select_one(".description-summary")
             description = description_element.text.strip() if description_element else ""
             
             # Get genres
@@ -536,23 +580,40 @@ class Toonily(Scraper):
             author = ", ".join([a.text.strip() for a in author_elements]) if author_elements else "Unknown"
             
             # Get status
-            status_element = soup.select_one(".post-status .summary-content")
+            status_element = soup.select_one(".post-status .summary-content") or soup.select_one(".post-status")
             status = status_element.text.strip() if status_element else "Ongoing"
             
             # Get chapters
             chapters = []
-            chapter_elements = soup.select(".wp-manga-chapter") or soup.select(".main.version-chap li")
+            chapter_elements = soup.select(".wp-manga-chapter") or soup.select(".main.version-chap li") or soup.select(".listing-chapters_wrap li")
+            
+            print(f"Found {len(chapter_elements)} chapter elements")
+            
             for chapter in chapter_elements:
                 link = chapter.select_one("a")
                 if not link:
                     continue
                 
                 chapter_url = link.get("href", "")
-                chapter_id = chapter_url.split("/")[-2] if chapter_url.endswith("/") else chapter_url.split("/")[-1]
+                
+                # Extract the chapter ID from URL
+                # Different ways to parse the URL (for Toonily.com)
+                if "/webtoon/" in chapter_url:
+                    # Extract ID after /webtoon/ in URL
+                    match = re.search(r'/webtoon/[^/]+/([^/]+)', chapter_url)
+                    if match:
+                        chapter_id = match.group(1)
+                    else:
+                        # Fallback to just using the last part of the URL
+                        chapter_id = chapter_url.split("/")[-2] if chapter_url.endswith("/") else chapter_url.split("/")[-1]
+                else:
+                    # Standard Madara pattern
+                    chapter_id = chapter_url.split("/")[-2] if chapter_url.endswith("/") else chapter_url.split("/")[-1]
+                
                 chapter_title = link.text.strip()
                 
                 # Get release date if available
-                date_element = chapter.select_one(".chapter-release-date") or chapter.select_one(".chapter-time")
+                date_element = chapter.select_one(".chapter-release-date") or chapter.select_one(".chapter-time") or chapter.select_one(".post-on")
                 release_date = date_element.text.strip() if date_element else ""
                 
                 chapters.append({
