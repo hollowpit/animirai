@@ -175,7 +175,7 @@ class Comick(Scraper):
         current_page = 1
         has_next_page = True
         
-        while has_next_page and current_page <= 5:
+        while has_next_page and current_page <= 2:
             params["page"] = current_page
             response = self._make_request(url, params=params)
             

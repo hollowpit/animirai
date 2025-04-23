@@ -2,7 +2,8 @@ import requests
 import os
 
 class Manga():
-    def __init__(self, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, url, title: str, author: str, description: str, poster: str, chapters: int, chapter_and_pages: dict, tags: list=None, genres: list=None, status: str="Ongoing", rating: float=-1.00):
+        self.url = url
         self.title = title
         self.author = author
         self.description = description
@@ -75,8 +76,8 @@ class Anime():
                         "required": "Must have one quality or more"
                     }
                 },
-            ]
-        }
+            }
+        
 
     def get(self) -> dict:
         return {
