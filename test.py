@@ -4,7 +4,7 @@ import importlib
 import inspect
 from src.lib.types import Scraper
 
-def get_all_scrapers():
+def get_all_sources():
     """
     Dynamically imports all scraper classes from the sources directory.
     Returns a list of initialized scraper instances.
@@ -44,7 +44,7 @@ def get_all_scrapers():
 
 if __name__ == "__main__":
     # Test the function
-    all_scrapers = get_all_scrapers()
+    all_scrapers = get_all_sources()
     print(f"\nTotal scrapers found: {len(all_scrapers)}")
     for i, scraper in enumerate(all_scrapers, 1):
         print(f"{i}. {scraper.__class__.__name__} - {scraper.base_url}")
