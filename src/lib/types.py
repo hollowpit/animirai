@@ -5,6 +5,7 @@ class Manga():
     def __init__(self, id: str, url: str, title: str, author: str, description: str, poster: str, chapters: int, tags:list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00, chapter_ids: dict= {"Chapter 1": "xxxxxxxx"}):
         self.id = id
         self.url = url
+        #self.name = name
         self.title = title
         self.author = author
         self.description = description
@@ -97,6 +98,7 @@ class Anime():
 
 class Scraper():
     def __init__(self, name="Missing Name", url="Missing Url", api_url=None, scraper_version="1.0.0"):
+        self.name = name
         self.base_url = url
         self.api_url = api_url
         self.scraper_version = scraper_version
