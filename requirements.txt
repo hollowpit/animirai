@@ -3,3 +3,5 @@ cloudscraper
 uvicorn
 fastapi
 beautifulsoup4
+fastapi
+uvicorn
