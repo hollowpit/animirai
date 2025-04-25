@@ -107,7 +107,7 @@ class AllAnime(Scraper):
                     sub_episodes = episodes_detail.get(self.preferences["preferred_sub"], [])
                     episode_count = len(sub_episodes)
 
-                    # Create episode IDs dictionary
+                    # Create episode IDs dictionary in format "anime_id-episode_number"
                     for i, ep_str in enumerate(sub_episodes):
                         episode_ids[f"Episode {ep_str}"] = f"{anime_id}-{ep_str}"
 
@@ -326,20 +326,29 @@ class AllAnime(Scraper):
         try:
             print(f"Getting episode: {episode_id[:100]}...")
             
-            # Parse the episode_id which should contain the payload JSON
-            try:
-                data = json.loads(episode_id)
-            except json.JSONDecodeError as je:
-                print(f"Error parsing episode_id JSON: {je}")
-                print(f"Raw episode_id: {episode_id}")
+            # Parse the episode ID (format: anime_id-episode_number)
+            if "-" not in episode_id:
+                print(f"Invalid episode_id format: {episode_id}")
                 return Episode(
                     id=episode_id,
-                    title="JSON Parse Error",
+                    title="Invalid ID Format",
                     url="",
                     quality="unknown",
                     language="unknown"
                 )
-
+                
+            anime_id, episode_number = episode_id.split("-", 1)
+            
+            # Prepare the data for the API request
+            data = {
+                "variables": {
+                    "showId": anime_id,
+                    "translationType": self.preferences["preferred_sub"],
+                    "episodeString": episode_number
+                },
+                "query": self.streams_query
+            }
+            
             # Make the API request to get sources
             response = self.session.post(
                 f"{self.api_url}/api",
