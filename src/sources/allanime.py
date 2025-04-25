@@ -50,14 +50,20 @@ class AllAnime(Scraper):
 
     def popular_anime(self, page: int = 1) -> List[Anime]:
         try:
+            # Use a different query approach for popular anime
             data = {
                 "variables": {
-                    "type": "anime",
-                    "size": self.page_size,
-                    "dateRange": 7,
-                    "page": page
+                    "search": {
+                        "allowAdult": False,
+                        "allowUnknown": False,
+                        "sortBy": "Top" # Sort by top rating
+                    },
+                    "limit": self.page_size,
+                    "page": page,
+                    "translationType": self.preferences["preferred_sub"],
+                    "countryOrigin": "ALL"
                 },
-                "query": "query ($type: RecommendationQueryType, $size: Int, $dateRange: Int, $page: Int) { queryPopular(type: $type, size: $size, dateRange: $dateRange, page: $page) { recommendations { anyCard { _id name englishName nativeName thumbnail slugTime type } } } }"
+                "query": self.search_query
             }
             
             response = self.session.post(
@@ -68,33 +74,48 @@ class AllAnime(Scraper):
             
             if response.status_code != 200:
                 print(f"Error: API returned status code {response.status_code}")
+                print(f"Response: {response.text[:200]}")
                 return []
             
             data = response.json()
-            recommendations = data.get('data', {}).get('queryPopular', {}).get('recommendations', [])
+            shows = data.get('data', {}).get('shows', {})
+            edges = shows.get('edges', [])
             
-            if not recommendations:
-                print("No recommendations found in API response")
+            if not edges:
+                print("No popular anime found in API response")
                 return []
             
             results = []
-            for rec in recommendations:
-                card = rec.get('anyCard')
-                if not card or '_id' not in card:
+            for item in edges:
+                if not item or '_id' not in item:
                     continue
                 
-                title = card.get('name', 'Unknown Title')
+                title = item.get('name', 'Unknown Title')
                 if self.preferences["preferred_title_style"] == "eng":
-                    title = card.get('englishName') or title
+                    title = item.get('englishName') or title
                 elif self.preferences["preferred_title_style"] == "native":
-                    title = card.get('nativeName') or title
+                    title = item.get('nativeName') or title
                 
-                thumbnail_url = card.get('thumbnail')
+                thumbnail_url = item.get('thumbnail')
                 url = f"{self.base_url}/anime/{self._slugify(title)}"
-                anime_id = card.get('_id')
+                anime_id = item.get('_id')
                 
-                # Create episode IDs dictionary
-                episode_ids = {"Episode 1": anime_id}
+                episodes_detail = item.get('availableEpisodesDetail', {})
+                episode_count = 0
+                episode_ids = {}
+                
+                if isinstance(episodes_detail, dict):
+                    sub_episodes = episodes_detail.get(self.preferences["preferred_sub"], [])
+                    episode_count = len(sub_episodes)
+                    
+                    # Create episode IDs dictionary
+                    for i, ep_str in enumerate(sub_episodes):
+                        episode_ids[f"Episode {ep_str}"] = f"{anime_id}-{ep_str}"
+                
+                if episode_count == 0:
+                    # Default to at least one episode if none found
+                    episode_count = 1
+                    episode_ids = {"Episode 1": anime_id}
                 
                 anime = Anime(
                     id=anime_id,
@@ -102,7 +123,7 @@ class AllAnime(Scraper):
                     url=url,
                     description="",
                     poster=thumbnail_url,
-                    episodes=1, # Default to 1 episode until we get actual count
+                    episodes=episode_count,
                     episode_ids=episode_ids,
                     tags=[],
                     genres=[],
@@ -145,6 +166,7 @@ class AllAnime(Scraper):
             
             if response.status_code != 200:
                 print(f"Error: API returned status code {response.status_code}")
+                print(f"Response: {response.text[:200]}")
                 return []
             
             data = response.json()

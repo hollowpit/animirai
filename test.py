@@ -14,6 +14,7 @@ def test_popular_anime():
             print(f"Anime {i+1}: {anime.title}")
             print(f"ID: {anime.id}")
             print(f"URL: {anime.url}")
+            print(f"Episodes: {anime.episodes}")
             print(f"Poster: {anime.poster}")
             print("-" * 30)
 
@@ -30,7 +31,7 @@ def test_latest_anime():
             print(f"Anime {i+1}: {anime.title}")
             print(f"ID: {anime.id}")
             print(f"URL: {anime.url}")
-            print(f"Episodes: {anime.chapters}")
+            print(f"Episodes: {anime.episodes}")
             print(f"Poster: {anime.poster}")
             print("-" * 30)
 
