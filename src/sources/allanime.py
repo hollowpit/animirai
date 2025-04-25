@@ -326,18 +326,13 @@ class AllAnime(Scraper):
         try:
             data = json.loads(episode_id)
 
-            # Make sure we have the right headers for API call
-            api_headers = self.headers.copy()
-            api_headers['Host'] = urllib.parse.urlparse(self.api_url).netloc
-
             response = self.session.post(
                 f"{self.api_url}/api",
                 json=data,
-                headers=api_headers
+                headers=self.headers
             )
 
             if response.status_code != 200:
-                print(f"Error fetching episode: Status code {response.status_code}")
                 return Episode(
                     id=episode_id,
                     title="Error",
@@ -350,7 +345,6 @@ class AllAnime(Scraper):
 
             episode_data = response_data.get('data', {}).get('episode', {})
             if not episode_data or 'sourceUrls' not in episode_data:
-                print("No streams found in episode data")
                 return Episode(
                     id=episode_id,
                     title="No streams found",
@@ -361,7 +355,6 @@ class AllAnime(Scraper):
 
             raw_sources = episode_data.get('sourceUrls', [])
             if not raw_sources:
-                print("Empty sourceUrls in episode data")
                 return Episode(
                     id=episode_id,
                     title="No sources found",
@@ -370,141 +363,47 @@ class AllAnime(Scraper):
                     language="unknown"
                 )
 
-            # Extract variables to use in the Episode object
+            # Find the best source
+            best_source = None
+            highest_priority = -1
+
+            for source in raw_sources:
+                source_url = self._decrypt_source(source.get('sourceUrl', ''))
+                source_name = source.get('sourceName', '').lower()
+                priority = float(source.get('priority', 0))
+
+                # Skip if not a direct URL we can use
+                if not source_url or not source_url.startswith('http'):
+                    continue
+
+                # Favor higher priority
+                if priority > highest_priority:
+                    highest_priority = priority
+                    best_source = {
+                        'url': source_url,
+                        'name': source_name,
+                        'priority': priority
+                    }
+
+            if not best_source:
+                return Episode(
+                    id=episode_id,
+                    title="No valid sources",
+                    url="",
+                    quality="unknown",
+                    language="unknown"
+                )
+
+            # Extract episode info from the data
             variables = data.get('variables', {})
             episode_string = variables.get('episodeString', 'unknown')
             language = variables.get('translationType', 'unknown')
 
-            # Define lists to store different types of sources
-            valid_sources = []
-            internal_sources = []
-            
-            # Track available priorities
-            highest_priority = -1
-            best_source = None
-
-            # Process all sources and categorize them
-            for source in raw_sources:
-                source_url = self._decrypt_source(source.get('sourceUrl', ''))
-                source_name = source.get('sourceName', '').lower()
-                source_type = source.get('type', '')
-                priority = float(source.get('priority', 0))
-
-                # Deal with different source types
-                if source_url.startswith("/apivtwo/"):
-                    # Internal AllAnime server (handled by their player)
-                    internal_sources.append({
-                        'url': source_url,
-                        'name': source_name,
-                        'type': source_type,
-                        'priority': priority
-                    })
-
-                elif source_url.startswith("http"):
-                    # Direct URL we can use
-                    valid_sources.append({
-                        'url': source_url,
-                        'name': source_name,
-                        'type': source_type,
-                        'priority': priority
-                    })
-                    
-                    # Keep track of the highest priority source
-                    if priority > highest_priority:
-                        highest_priority = priority
-                        best_source = {
-                            'url': source_url,
-                            'name': source_name,
-                            'priority': priority
-                        }
-
-            # Process internal sources - try to extract from them if available
-            for internal_source in internal_sources:
-                try:
-                    s_url = internal_source['url']
-                    s_name = internal_source['name']
-                    
-                    # Get the version endpoint info
-                    version_response = self.session.get(f"{self.base_url}/getVersion")
-                    if version_response.status_code != 200:
-                        continue
-                        
-                    version_data = version_response.json()
-                    iframe_head = version_data.get('episodeIframeHead')
-                    
-                    if not iframe_head:
-                        continue
-                        
-                    # Replace /clock? with /clock.json? as done in the reference
-                    modified_url = s_url.replace("/clock?", "/clock.json?")
-                    
-                    # Get video link data
-                    video_headers = self.headers.copy()
-                    video_response = self.session.get(f"{iframe_head}{modified_url}", headers=video_headers)
-                    
-                    if video_response.status_code != 200:
-                        continue
-                        
-                    # Parse the response
-                    link_data = video_response.json()
-                    links = link_data.get('links', [])
-                    
-                    # Process MP4 or HLS links
-                    for link in links:
-                        if link.get('mp4') is True:
-                            # Direct MP4 link - use as a valid source
-                            valid_sources.append({
-                                'url': link.get('link', ''),
-                                'name': f"Direct MP4 ({s_name})",
-                                'priority': internal_source['priority'] + 0.5  # Boost priority slightly
-                            })
-                            
-                            # Update best source if this is higher priority
-                            if internal_source['priority'] + 0.5 > highest_priority:
-                                highest_priority = internal_source['priority'] + 0.5
-                                best_source = {
-                                    'url': link.get('link', ''),
-                                    'name': f"Direct MP4 ({s_name})",
-                                    'priority': internal_source['priority'] + 0.5
-                                }
-                        
-                        elif link.get('hls') is True:
-                            # HLS link - also a valid source
-                            valid_sources.append({
-                                'url': link.get('link', ''),
-                                'name': f"HLS ({s_name})",
-                                'priority': internal_source['priority'] + 0.6  # Slightly prefer HLS
-                            })
-                            
-                            # Update best source if this is higher priority
-                            if internal_source['priority'] + 0.6 > highest_priority:
-                                highest_priority = internal_source['priority'] + 0.6
-                                best_source = {
-                                    'url': link.get('link', ''),
-                                    'name': f"HLS ({s_name})",
-                                    'priority': internal_source['priority'] + 0.6
-                                }
-                                
-                except Exception as e:
-                    print(f"Error processing internal source: {e}")
-
-            # If we still don't have a valid source, return an error
-            if not best_source:
-                print("No valid sources found after processing")
-                return Episode(
-                    id=episode_id,
-                    title=f"Episode {episode_string}",
-                    url="",
-                    quality="unknown",
-                    language=language
-                )
-
-            # Return the best source we found
             return Episode(
                 id=episode_id,
                 title=f"Episode {episode_string}",
                 url=best_source['url'],
-                quality=f"{self.preferences['preferred_quality']} ({best_source['name']})",
+                quality=self.preferences["preferred_quality"],
                 language=language
             )
 
