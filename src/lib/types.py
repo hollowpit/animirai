@@ -52,36 +52,16 @@ class Chapter():
     
 
 class Anime():
-    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_and_videos: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_ids: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
         self.title = title
         self.description = description
         self.poster = poster
         self.episodes = episodes
-        self.episode_and_videos = episode_and_videos
+        self.episode_ids = episode_ids
         self.tags = tags
         self.genres = genres
         self.status = status
         self.rating = rating
-
-    def _episodes_and_videos_model(self):
-        """General Structure of the episodes and videos"""
-        return {
-            "episodes":
-                {
-                    "title": "Episode 1 - Name Of The Episode",
-                    "total_episodes": 3,
-                    "streaming_links": {
-                        "1080p": "video_url_1",
-                        "720p": "video_url_2",
-                        "480p": "video_url_3",
-                        "360p": "video_url_4",
-                        "240p": "video_url_5",
-                        "144p": "video_url_6",
-                        "required": "Must have one quality or more"
-                    }
-                },
-            }
-
 
     def get(self) -> dict:
         return {
@@ -93,7 +73,24 @@ class Anime():
             "genres": self.genres,
             "status": self.status,
             "rating": self.rating,
-            "episodes_and_videos": self._episodes_and_videos_model
+            "episodes_and_ids": self.episode_ids
+        }
+
+class Episode():
+    def __init__(self, id, title: str, url: str, quality: str, language: str="english"):
+        self.id = id
+        self.title = title
+        self.stream_url = url
+        self.quality = quality
+        self.language = language
+
+    def get(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "stream_url": self.stream_url,
+            "quality": self.quality,
+            "language": self.language
         }
 
 class Scraper():
