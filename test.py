@@ -17,7 +17,8 @@ def test_popular_anime():
             print(f"Episodes: {anime.episodes}")
             print(f"Poster: {anime.poster}")
             print(anime.episode_ids)
-            print(scraper.get_episode(anime.episode_ids["Episode 1"]).get())
+            e = scraper.get_episode(anime.episode_ids["Episode 1"]).get()
+            with open("u.txt", "a") as n: n.write(e["stream_url"] + "\n")
             print("-" * 30)
 
 def test_latest_anime():

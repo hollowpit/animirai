@@ -575,7 +575,7 @@ class AllAnime(Scraper):
                 return Episode(
                     id=episode_id,
                     title=f"Episode {episode_string}",
-                    url=streaming_url if streaming_url else okru_source['url'],
+                    url=streaming_url,
                     quality=f"OKRU {quality}",
                     language=language
                 )
