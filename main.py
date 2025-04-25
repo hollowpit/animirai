@@ -44,7 +44,7 @@ sources_dict = {scraper.name.lower(): scraper for scraper in sources}
 
 @app.get("/")
 async def root():
-    return {"message": "Manga Reader API"}
+    return {"message": "API"}
 
 @app.get("/api/sources")
 async def get_sources():
