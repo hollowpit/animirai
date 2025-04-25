@@ -305,6 +305,9 @@ class AllAnime(Scraper):
                     episode_ids[f"Episode {ep_str}"] = json.dumps(payload)
 
             return Anime(
+                id="missing",
+                url="missing",
+                author="missing",
                 title=title,
                 description=description,
                 poster=show.get('thumbnail'),

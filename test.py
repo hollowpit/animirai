@@ -16,6 +16,8 @@ def test_popular_anime():
             print(f"URL: {anime.url}")
             print(f"Episodes: {anime.episodes}")
             print(f"Poster: {anime.poster}")
+            print(anime.episode_ids)
+            print(scraper.get_episode(anime.episode_ids["Episode 1"]).get())
             print("-" * 30)
 
 def test_latest_anime():
