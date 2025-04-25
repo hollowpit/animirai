@@ -143,12 +143,13 @@ class AllAnime(Scraper):
 
     def latest_anime(self, page: int = 1) -> List[Anime]:
         try:
+            # The API expects the sortBy parameter differently than what we're sending
+            # For latest anime, let's modify our approach
             data = {
                 "variables": {
                     "search": {
                         "allowAdult": False,
-                        "allowUnknown": False,
-                        "sortBy": "update"
+                        "allowUnknown": False
                     },
                     "limit": self.page_size,
                     "page": page,
@@ -158,15 +159,20 @@ class AllAnime(Scraper):
                 "query": self.search_query
             }
             
+            # Add sortBy correctly to the search object
+            data["variables"]["search"]["sortBy"] = "update"
+            
             response = self.session.post(
                 f"{self.api_url}/api",
                 json=data,
                 headers=self.headers
             )
             
+            # For debugging
             if response.status_code != 200:
                 print(f"Error: API returned status code {response.status_code}")
                 print(f"Response: {response.text[:200]}")
+                print(f"Request payload: {json.dumps(data)[:200]}")
                 return []
             
             data = response.json()
