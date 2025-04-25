@@ -149,7 +149,7 @@ class AllAnime(Scraper):
                     "search": {
                         "allowAdult": False,
                         "allowUnknown": False,
-                        "sortBy": "Update"  # Using "Update" with capital U as required by API
+                        "sortBy": "update"  # Use lowercase "update" instead of "Update"
                     },
                     "limit": self.page_size,
                     "page": page,
