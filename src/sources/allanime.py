@@ -460,49 +460,79 @@ class AllAnime(Scraper):
                         language="unknown"
                     )
                 
-                # Find the data-options attribute in div element
-                data_options_match = re.search(r'data-options="([^"]+)"', okru_response.text)
-                if not data_options_match:
+                # Find the JSON data block in the page
+                json_data_match = re.search(r'data-options="([^"]+)"', okru_response.text)
+                if not json_data_match:
                     print("No data-options found in OKRU page")
-                    # Return the source URL if we can't extract the direct streaming URL
-                    return Episode(
-                        id=episode_id,
-                        title="OKRU Source",
-                        url=okru_source['url'],
-                        quality=self.preferences["preferred_quality"],
-                        language="unknown"
-                    )
+                    # Try secondary method if data-options not found
+                    json_data_match = re.search(r'data-player-options="([^"]+)"', okru_response.text)
+                    if not json_data_match:
+                        print("No data-player-options found in OKRU page either")
+                        return Episode(
+                            id=episode_id,
+                            title="OKRU Source",
+                            url=okru_source['url'],
+                            quality=self.preferences["preferred_quality"],
+                            language="unknown"
+                        )
                 
-                # Extract and clean up the data-options attribute
-                data_options = data_options_match.group(1)
-                data_options = data_options.replace('&quot;', '"')
+                # Clean up the HTML-encoded JSON data
+                json_data = json_data_match.group(1)
+                json_data = json_data.replace('&quot;', '"')  # Replace HTML quote entities
+                json_data = json_data.replace('\\&quot;', '\\"')  # Fix any escaped quotes
+                json_data = json_data.replace('\\\\', '\\')  # Fix double escaping
                 
-                # Extract the metadata which contains the video URLs
-                metadata_match = re.search(r'"metadata":"(.*?[^\\])"', data_options)
+                # Look for metadata JSON inside the data
+                metadata_match = re.search(r'"metadata":"(.*?[^\\])"', json_data)
                 if not metadata_match:
                     print("No metadata found in data-options")
-                    return Episode(
-                        id=episode_id,
-                        title="OKRU Source",
-                        url=okru_source['url'],
-                        quality=self.preferences["preferred_quality"],
-                        language="unknown"
-                    )
+                    # Try loading the data-options directly
+                    try:
+                        player_options = json.loads(json_data)
+                        if 'flashvars' in player_options and 'metadata' in player_options['flashvars']:
+                            metadata_json = player_options['flashvars']['metadata']
+                        else:
+                            print("No metadata in flashvars")
+                            return Episode(
+                                id=episode_id,
+                                title="OKRU Source",
+                                url=okru_source['url'],
+                                quality=self.preferences["preferred_quality"],
+                                language="unknown"
+                            )
+                    except json.JSONDecodeError:
+                        print("Failed to parse player options JSON")
+                        return Episode(
+                            id=episode_id,
+                            title="OKRU Source",
+                            url=okru_source['url'],
+                            quality=self.preferences["preferred_quality"],
+                            language="unknown"
+                        )
+                else:
+                    # Clean up the metadata JSON - it's doubly escaped
+                    metadata_json = metadata_match.group(1)
+                    metadata_json = metadata_json.replace('\\"', '"')
+                    metadata_json = metadata_json.replace('\\\\', '\\')
                 
-                # Parse the metadata JSON
-                metadata_json = metadata_match.group(1).replace('\\"', '"')
+                # Parse the actual metadata
                 try:
                     metadata = json.loads(metadata_json)
                 except json.JSONDecodeError as je:
                     print(f"Error parsing metadata JSON: {je}")
                     print(f"Metadata JSON: {metadata_json[:100]}...")
-                    return Episode(
-                        id=episode_id,
-                        title="OKRU Source",
-                        url=okru_source['url'],
-                        quality=self.preferences["preferred_quality"],
-                        language="unknown"
-                    )
+                    # Try with extra unescaping for problematic characters
+                    try:
+                        metadata_json = metadata_json.replace('\\\\u', '\\u')
+                        metadata = json.loads(metadata_json)
+                    except:
+                        return Episode(
+                            id=episode_id,
+                            title="OKRU Source",
+                            url=okru_source['url'],
+                            quality=self.preferences["preferred_quality"],
+                            language="unknown"
+                        )
                 
                 # Get the video URLs
                 videos = metadata.get('videos', [])
@@ -517,8 +547,20 @@ class AllAnime(Scraper):
                     )
                 
                 # Sort videos by quality (highest first)
-                # OKRU typically has mp4 videos with names like "mobile", "lowest", "low", "sd", "hd"
-                # The first one is usually the highest quality
+                quality_rank = {
+                    'full': 5,
+                    'hd': 4, 
+                    'sd': 3,
+                    'low': 2,
+                    'lowest': 1,
+                    'mobile': 0
+                }
+                
+                # Get the best quality video
+                if len(videos) > 1:
+                    # Sort by quality if multiple videos
+                    videos.sort(key=lambda v: quality_rank.get(v.get('name', '').lower(), -1), reverse=True)
+                
                 best_video = videos[0]
                 streaming_url = best_video.get('url', '')
                 quality = best_video.get('name', 'unknown')
