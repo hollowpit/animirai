@@ -149,7 +149,8 @@ class AllAnime(Scraper):
                 "variables": {
                     "search": {
                         "allowAdult": False,
-                        "allowUnknown": False
+                        "allowUnknown": False,
+                        "sortBy": "Update"  # Use "Update" with capital U instead of "update"
                     },
                     "limit": self.page_size,
                     "page": page,
@@ -158,9 +159,6 @@ class AllAnime(Scraper):
                 },
                 "query": self.search_query
             }
-            
-            # Add sortBy correctly to the search object
-            data["variables"]["search"]["sortBy"] = "update"
             
             response = self.session.post(
                 f"{self.api_url}/api",
