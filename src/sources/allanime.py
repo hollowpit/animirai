@@ -67,10 +67,15 @@ class AllAnime(Scraper):
             )
             
             if response.status_code != 200:
+                print(f"Error: API returned status code {response.status_code}")
                 return []
             
             data = response.json()
             recommendations = data.get('data', {}).get('queryPopular', {}).get('recommendations', [])
+            
+            if not recommendations:
+                print("No recommendations found in API response")
+                return []
             
             results = []
             for rec in recommendations:
@@ -85,17 +90,24 @@ class AllAnime(Scraper):
                     title = card.get('nativeName') or title
                 
                 thumbnail_url = card.get('thumbnail')
-                url = f"{card.get('_id')}<&sep>{card.get('slugTime', '')}<&sep>{self._slugify(card.get('name', ''))}"
+                url = f"{self.base_url}/anime/{self._slugify(title)}"
+                anime_id = card.get('_id')
+                
+                # Create episode IDs dictionary
+                episode_ids = {"Episode 1": anime_id}
                 
                 anime = Anime(
+                    id=anime_id,
                     title=title,
+                    url=url,
                     description="",
                     poster=thumbnail_url,
-                    episodes=0,
-                    episode_ids={},
+                    episodes=1, # Default to 1 episode until we get actual count
+                    episode_ids=episode_ids,
                     tags=[],
                     genres=[],
-                    status="Ongoing"
+                    status="Ongoing",
+                    author=""
                 )
                 
                 results.append(anime)
@@ -104,6 +116,8 @@ class AllAnime(Scraper):
             
         except Exception as e:
             print(f"Error fetching popular anime: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def latest_anime(self, page: int = 1) -> List[Anime]:
@@ -130,11 +144,16 @@ class AllAnime(Scraper):
             )
             
             if response.status_code != 200:
+                print(f"Error: API returned status code {response.status_code}")
                 return []
             
             data = response.json()
             shows = data.get('data', {}).get('shows', {})
             edges = shows.get('edges', [])
+            
+            if not edges:
+                print("No anime found in API response")
+                return []
             
             results = []
             for item in edges:
@@ -148,24 +167,38 @@ class AllAnime(Scraper):
                     title = item.get('nativeName') or title
                 
                 thumbnail_url = item.get('thumbnail')
-                anime_id = f"{item.get('_id')}<&sep>{item.get('slugTime', '')}<&sep>{self._slugify(item.get('name', ''))}"
+                url = f"{self.base_url}/anime/{self._slugify(title)}"
+                anime_id = item.get('_id')
                 
                 episodes_detail = item.get('availableEpisodesDetail', {})
                 episode_count = 0
+                episode_ids = {}
                 
                 if isinstance(episodes_detail, dict):
                     sub_episodes = episodes_detail.get(self.preferences["preferred_sub"], [])
                     episode_count = len(sub_episodes)
+                    
+                    # Create episode IDs dictionary
+                    for i, ep_str in enumerate(sub_episodes):
+                        episode_ids[f"Episode {ep_str}"] = f"{anime_id}-{ep_str}"
+                
+                if episode_count == 0:
+                    # Default to at least one episode if none found
+                    episode_count = 1
+                    episode_ids = {"Episode 1": anime_id}
                 
                 anime = Anime(
+                    id=anime_id,
+                    url=url,
                     title=title,
                     description="",
                     poster=thumbnail_url,
                     episodes=episode_count,
-                    episode_ids={},
+                    episode_ids=episode_ids,
                     tags=[],
                     genres=[],
-                    status="Ongoing"
+                    status="Ongoing",
+                    author=""
                 )
                 
                 results.append(anime)
@@ -174,6 +207,8 @@ class AllAnime(Scraper):
             
         except Exception as e:
             print(f"Error fetching latest anime: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def search_anime(self, query: str, page: int = 1, filters: Optional[Dict[str, Any]] = None) -> List[Anime]:
