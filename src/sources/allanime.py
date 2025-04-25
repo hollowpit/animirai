@@ -325,8 +325,22 @@ class AllAnime(Scraper):
     def get_episode(self, episode_id: str) -> Episode:
         try:
             print(f"Getting episode: {episode_id[:100]}...")
-            data = json.loads(episode_id)
+            
+            # Parse the episode_id which should contain the payload JSON
+            try:
+                data = json.loads(episode_id)
+            except json.JSONDecodeError as je:
+                print(f"Error parsing episode_id JSON: {je}")
+                print(f"Raw episode_id: {episode_id}")
+                return Episode(
+                    id=episode_id,
+                    title="JSON Parse Error",
+                    url="",
+                    quality="unknown",
+                    language="unknown"
+                )
 
+            # Make the API request to get sources
             response = self.session.post(
                 f"{self.api_url}/api",
                 json=data,
@@ -337,14 +351,27 @@ class AllAnime(Scraper):
                 print(f"Error: API returned status code {response.status_code}")
                 return Episode(
                     id=episode_id,
-                    title="Error",
+                    title="API Error",
                     url="",
                     quality="unknown",
                     language="unknown"
                 )
 
-            response_data = response.json()
+            # Parse the API response
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as je:
+                print(f"Error parsing API response JSON: {je}")
+                print(f"Raw response: {response.text[:200]}")
+                return Episode(
+                    id=episode_id,
+                    title="API Response Error",
+                    url="",
+                    quality="unknown",
+                    language="unknown"
+                )
 
+            # Extract episode data
             episode_data = response_data.get('data', {}).get('episode', {})
             if not episode_data or 'sourceUrls' not in episode_data:
                 print(f"No streams found in API response")
@@ -356,6 +383,7 @@ class AllAnime(Scraper):
                     language="unknown"
                 )
 
+            # Get all source URLs
             raw_sources = episode_data.get('sourceUrls', [])
             if not raw_sources:
                 print(f"Source URLs list is empty")
@@ -367,22 +395,22 @@ class AllAnime(Scraper):
                     language="unknown"
                 )
 
-            # Find Okru source (prioritize it)
+            # ONLY LOOK FOR OKRU SOURCES
             okru_source = None
-            other_source = None
             highest_priority = -1
 
+            print(f"Found {len(raw_sources)} potential sources, looking for OKRU only")
             for source in raw_sources:
                 source_url = self._decrypt_source(source.get('sourceUrl', ''))
                 source_name = source.get('sourceName', '').lower()
                 priority = float(source.get('priority', 0))
 
-                # Skip if not a URL we can use
                 if not source_url:
                     continue
 
-                # Look specifically for Okru sources
-                if "ok.ru" in source_url or "okru" in source_name.lower():
+                # Check if it's an OKRU source
+                if "ok.ru" in source_url or "okru" in source_name:
+                    print(f"Found OKRU source: {source_url}")
                     if priority > highest_priority:
                         highest_priority = priority
                         okru_source = {
@@ -390,81 +418,130 @@ class AllAnime(Scraper):
                             'name': source_name,
                             'priority': priority
                         }
-                # Store other HTTP sources as fallback
-                elif source_url.startswith('http') and not other_source:
-                    other_source = {
-                        'url': source_url,
-                        'name': source_name,
-                        'priority': priority
-                    }
 
-            # Extract video URL from Okru
-            streaming_url = ""
-            if okru_source:
-                print(f"Found Okru source: {okru_source['url']}")
-                try:
-                    # Use requests session to fetch the okru page
-                    okru_response = requests.get(okru_source['url'], headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-                        'Accept': '*/*',
-                        'Referer': self.base_url
-                    })
-                    
-                    if okru_response.status_code == 200:
-                        # Find the data-options attribute in div element
-                        import re
-                        data_options_match = re.search(r'data-options="([^"]+)"', okru_response.text)
-                        
-                        if data_options_match:
-                            data_options = data_options_match.group(1)
-                            data_options = data_options.replace('&quot;', '"').replace('\\', '')
-                            
-                            # Extract the highest quality video URL 
-                            # Format is typically: {"flashvars":{"metadata":"JSON DATA WITH VIDEOS"}
-                            metadata_match = re.search(r'"metadata":"(.*?[^\\])"', data_options)
-                            if metadata_match:
-                                metadata_json = metadata_match.group(1).replace('\\"', '"')
-                                metadata = json.loads(metadata_json)
-                                
-                                # Get the best quality video
-                                videos = metadata.get('videos', [])
-                                if videos:
-                                    # Sort by quality (usually the first one is highest quality)
-                                    best_video = videos[0]
-                                    streaming_url = best_video.get('url', '')
-                                    print(f"Extracted Okru streaming URL: {streaming_url[:50]}...")
-                except Exception as e:
-                    print(f"Error extracting from Okru: {e}")
-                    # Continue with other sources if Okru extraction fails
-
-            # If Okru extraction failed, use the best alternate source
-            best_source = okru_source if streaming_url else (other_source or None)
-            
-            if not best_source:
-                print(f"No usable sources found")
+            # If no OKRU source found, return error
+            if not okru_source:
+                print("No OKRU sources found")
                 return Episode(
                     id=episode_id,
-                    title="No valid sources",
+                    title="No OKRU source",
                     url="",
                     quality="unknown",
                     language="unknown"
                 )
 
-            # Extract episode info from the data
-            variables = data.get('variables', {})
-            episode_string = variables.get('episodeString', 'unknown')
-            language = variables.get('translationType', 'unknown')
-
-            # Use the extracted streaming URL if available, otherwise use the source URL
-            final_url = streaming_url if streaming_url else best_source['url']
-            
-            return Episode(
-                id=episode_id,
-                title=f"Episode {episode_string}",
-                url=final_url,
-                quality=self.preferences["preferred_quality"],
-                language=language
-            )
+            # Extract video URL from OKRU
+            print(f"Extracting URL from OKRU source: {okru_source['url']}")
+            try:
+                # Get the OKRU page
+                okru_response = self.session.get(okru_source['url'], headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                    'Accept': '*/*',
+                    'Referer': self.base_url
+                })
+                
+                if okru_response.status_code != 200:
+                    print(f"Failed to get OKRU page: {okru_response.status_code}")
+                    # Return the source URL if we can't extract the direct streaming URL
+                    return Episode(
+                        id=episode_id,
+                        title="OKRU Source",
+                        url=okru_source['url'],
+                        quality=self.preferences["preferred_quality"],
+                        language="unknown"
+                    )
+                
+                # Find the data-options attribute in div element
+                data_options_match = re.search(r'data-options="([^"]+)"', okru_response.text)
+                if not data_options_match:
+                    print("No data-options found in OKRU page")
+                    # Return the source URL if we can't extract the direct streaming URL
+                    return Episode(
+                        id=episode_id,
+                        title="OKRU Source",
+                        url=okru_source['url'],
+                        quality=self.preferences["preferred_quality"],
+                        language="unknown"
+                    )
+                
+                # Extract and clean up the data-options attribute
+                data_options = data_options_match.group(1)
+                data_options = data_options.replace('&quot;', '"')
+                
+                # Extract the metadata which contains the video URLs
+                metadata_match = re.search(r'"metadata":"(.*?[^\\])"', data_options)
+                if not metadata_match:
+                    print("No metadata found in data-options")
+                    return Episode(
+                        id=episode_id,
+                        title="OKRU Source",
+                        url=okru_source['url'],
+                        quality=self.preferences["preferred_quality"],
+                        language="unknown"
+                    )
+                
+                # Parse the metadata JSON
+                metadata_json = metadata_match.group(1).replace('\\"', '"')
+                try:
+                    metadata = json.loads(metadata_json)
+                except json.JSONDecodeError as je:
+                    print(f"Error parsing metadata JSON: {je}")
+                    print(f"Metadata JSON: {metadata_json[:100]}...")
+                    return Episode(
+                        id=episode_id,
+                        title="OKRU Source",
+                        url=okru_source['url'],
+                        quality=self.preferences["preferred_quality"],
+                        language="unknown"
+                    )
+                
+                # Get the video URLs
+                videos = metadata.get('videos', [])
+                if not videos:
+                    print("No videos found in metadata")
+                    return Episode(
+                        id=episode_id,
+                        title="OKRU Source",
+                        url=okru_source['url'],
+                        quality=self.preferences["preferred_quality"],
+                        language="unknown"
+                    )
+                
+                # Sort videos by quality (highest first)
+                # OKRU typically has mp4 videos with names like "mobile", "lowest", "low", "sd", "hd"
+                # The first one is usually the highest quality
+                best_video = videos[0]
+                streaming_url = best_video.get('url', '')
+                quality = best_video.get('name', 'unknown')
+                
+                print(f"Found OKRU streaming URL: {streaming_url[:50]}...")
+                
+                # Extract episode info from the data
+                variables = data.get('variables', {})
+                episode_string = variables.get('episodeString', 'unknown')
+                language = variables.get('translationType', 'unknown')
+                
+                return Episode(
+                    id=episode_id,
+                    title=f"Episode {episode_string}",
+                    url=streaming_url if streaming_url else okru_source['url'],
+                    quality=f"OKRU {quality}",
+                    language=language
+                )
+                
+            except Exception as e:
+                import traceback
+                print(f"Error extracting from OKRU: {e}")
+                print(traceback.format_exc())
+                
+                # Fall back to returning the OKRU source URL if extraction failed
+                return Episode(
+                    id=episode_id,
+                    title="OKRU Source",
+                    url=okru_source['url'],
+                    quality=self.preferences["preferred_quality"],
+                    language="unknown"
+                )
 
         except Exception as e:
             import traceback
