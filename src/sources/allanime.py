@@ -324,6 +324,7 @@ class AllAnime(Scraper):
 
     def get_episode(self, episode_id: str) -> Episode:
         try:
+            print(f"Getting episode: {episode_id[:100]}...")
             data = json.loads(episode_id)
 
             response = self.session.post(
@@ -333,6 +334,7 @@ class AllAnime(Scraper):
             )
 
             if response.status_code != 200:
+                print(f"Error: API returned status code {response.status_code}")
                 return Episode(
                     id=episode_id,
                     title="Error",
@@ -345,6 +347,7 @@ class AllAnime(Scraper):
 
             episode_data = response_data.get('data', {}).get('episode', {})
             if not episode_data or 'sourceUrls' not in episode_data:
+                print(f"No streams found in API response")
                 return Episode(
                     id=episode_id,
                     title="No streams found",
@@ -355,6 +358,7 @@ class AllAnime(Scraper):
 
             raw_sources = episode_data.get('sourceUrls', [])
             if not raw_sources:
+                print(f"Source URLs list is empty")
                 return Episode(
                     id=episode_id,
                     title="No sources found",
@@ -363,8 +367,9 @@ class AllAnime(Scraper):
                     language="unknown"
                 )
 
-            # Find the best source
-            best_source = None
+            # Find Okru source (prioritize it)
+            okru_source = None
+            other_source = None
             highest_priority = -1
 
             for source in raw_sources:
@@ -372,20 +377,71 @@ class AllAnime(Scraper):
                 source_name = source.get('sourceName', '').lower()
                 priority = float(source.get('priority', 0))
 
-                # Skip if not a direct URL we can use
-                if not source_url or not source_url.startswith('http'):
+                # Skip if not a URL we can use
+                if not source_url:
                     continue
 
-                # Favor higher priority
-                if priority > highest_priority:
-                    highest_priority = priority
-                    best_source = {
+                # Look specifically for Okru sources
+                if "ok.ru" in source_url or "okru" in source_name.lower():
+                    if priority > highest_priority:
+                        highest_priority = priority
+                        okru_source = {
+                            'url': source_url,
+                            'name': source_name,
+                            'priority': priority
+                        }
+                # Store other HTTP sources as fallback
+                elif source_url.startswith('http') and not other_source:
+                    other_source = {
                         'url': source_url,
                         'name': source_name,
                         'priority': priority
                     }
 
+            # Extract video URL from Okru
+            streaming_url = ""
+            if okru_source:
+                print(f"Found Okru source: {okru_source['url']}")
+                try:
+                    # Use requests session to fetch the okru page
+                    okru_response = requests.get(okru_source['url'], headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+                        'Accept': '*/*',
+                        'Referer': self.base_url
+                    })
+                    
+                    if okru_response.status_code == 200:
+                        # Find the data-options attribute in div element
+                        import re
+                        data_options_match = re.search(r'data-options="([^"]+)"', okru_response.text)
+                        
+                        if data_options_match:
+                            data_options = data_options_match.group(1)
+                            data_options = data_options.replace('&quot;', '"').replace('\\', '')
+                            
+                            # Extract the highest quality video URL 
+                            # Format is typically: {"flashvars":{"metadata":"JSON DATA WITH VIDEOS"}
+                            metadata_match = re.search(r'"metadata":"(.*?[^\\])"', data_options)
+                            if metadata_match:
+                                metadata_json = metadata_match.group(1).replace('\\"', '"')
+                                metadata = json.loads(metadata_json)
+                                
+                                # Get the best quality video
+                                videos = metadata.get('videos', [])
+                                if videos:
+                                    # Sort by quality (usually the first one is highest quality)
+                                    best_video = videos[0]
+                                    streaming_url = best_video.get('url', '')
+                                    print(f"Extracted Okru streaming URL: {streaming_url[:50]}...")
+                except Exception as e:
+                    print(f"Error extracting from Okru: {e}")
+                    # Continue with other sources if Okru extraction fails
+
+            # If Okru extraction failed, use the best alternate source
+            best_source = okru_source if streaming_url else (other_source or None)
+            
             if not best_source:
+                print(f"No usable sources found")
                 return Episode(
                     id=episode_id,
                     title="No valid sources",
@@ -399,16 +455,21 @@ class AllAnime(Scraper):
             episode_string = variables.get('episodeString', 'unknown')
             language = variables.get('translationType', 'unknown')
 
+            # Use the extracted streaming URL if available, otherwise use the source URL
+            final_url = streaming_url if streaming_url else best_source['url']
+            
             return Episode(
                 id=episode_id,
                 title=f"Episode {episode_string}",
-                url=best_source['url'],
+                url=final_url,
                 quality=self.preferences["preferred_quality"],
                 language=language
             )
 
         except Exception as e:
+            import traceback
             print(f"Error fetching episode: {e}")
+            print(traceback.format_exc())
             return Episode(
                 id=episode_id,
                 title="Error",
