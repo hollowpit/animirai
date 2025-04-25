@@ -52,7 +52,10 @@ class Chapter():
     
 
 class Anime():
-    def __init__(self, title: str, description: str, poster: str, episodes: int, episode_ids: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
+    def __init__(self, id, url, title: str, author, description: str, poster: str, episodes: int, episode_ids: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
+        self.id = id
+        self.url = url
+        self.author = author 
         self.title = title
         self.description = description
         self.poster = poster
@@ -65,7 +68,10 @@ class Anime():
 
     def get(self) -> dict:
         return {
+            "id": self.id,
+            "url": self.url,
             "title": self.title,
+            "author": self.author,
             "description": self.description,
             "poster": self.poster,
             "total_episodes": self.episodes,
