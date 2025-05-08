@@ -49,55 +49,6 @@ class Chapter():
             "total_pages": self.total_pages,
             "pages": self.pages
         }
-    
-
-class Anime():
-    def __init__(self, id, url, title: str, author, description: str, poster: str, episodes: int, episode_ids: dict, tags: list=[], genres: list=[], status: str="Ongoing", rating: float=-1.00):
-        self.id = id
-        self.url = url
-        self.author = author 
-        self.title = title
-        self.description = description
-        self.poster = poster
-        self.episodes = episodes
-        self.episode_ids = episode_ids
-        self.tags = tags
-        self.genres = genres
-        self.status = status
-        self.rating = rating
-
-    def get(self) -> dict:
-        return {
-            "id": self.id,
-            "url": self.url,
-            "title": self.title,
-            "author": self.author,
-            "description": self.description,
-            "poster": self.poster,
-            "total_episodes": self.episodes,
-            "tags": self.tags,
-            "genres": self.genres,
-            "status": self.status,
-            "rating": self.rating,
-            "episodes_and_ids": self.episode_ids
-        }
-
-class Episode():
-    def __init__(self, id, title: str, url: str, quality: str, language: str="english"):
-        self.id = id
-        self.title = title
-        self.stream_url = url
-        self.quality = quality
-        self.language = language
-
-    def get(self):
-        return {
-            "id": self.id,
-            "title": self.title,
-            "stream_url": self.stream_url,
-            "quality": self.quality,
-            "language": self.language
-        }
 
 class Scraper():
     def __init__(self, name="Missing Name", url="Missing Url", api_url=None, scraper_version="1.0.0"):
